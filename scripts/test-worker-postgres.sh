@@ -26,7 +26,9 @@ docker run -d --name "$container" -p 127.0.0.1::5432 \
   bash -c 'cp /fixture/server.crt /tmp/server.crt; cp /fixture/server.key /tmp/server.key; chown postgres:postgres /tmp/server.key; chmod 600 /tmp/server.key; exec docker-entrypoint.sh postgres -c ssl=on -c ssl_cert_file=/tmp/server.crt -c ssl_key_file=/tmp/server.key' >/dev/null
 ready=false
 for attempt in {1..30}; do
-  if docker exec "$container" pg_isready -U postgres -d buzz_lease_test >/dev/null 2>&1; then ready=true; break; fi
+  # The entrypoint briefly runs a Unix-socket-only initialization server.
+  # Wait for the final TCP listener used by the tests, not that temporary server.
+  if docker exec "$container" pg_isready -h 127.0.0.1 -U postgres -d buzz_lease_test >/dev/null 2>&1; then ready=true; break; fi
   sleep 1
 done
 [[ "$ready" == true ]] || { echo 'Disposable PostgreSQL did not become ready' >&2; exit 1; }
