@@ -1,0 +1,2109 @@
+diff --git a/desktop/src-tauri/src/archive/sync.rs b/desktop/src-tauri/src/archive/sync.rs
+index 3730774..cf69c8c 100644
+--- a/desktop/src-tauri/src/archive/sync.rs
++++ b/desktop/src-tauri/src/archive/sync.rs
+@@ -583,7 +583,7 @@ pub async fn start_archive_sync(
+     // shared session is destructive to whatever scope holds it, so a superseded
+     // start must not be able to reach this line at all. See [`ArchiveOwnership`].
+     let (session, events) = relay_client
+-        .archive_session(relay_url, keys, &ownership)
++        .archive_session(Some(app.clone()), relay_url, keys, &ownership)
+         .await;
+ 
+     let io = AppIo {
+diff --git a/desktop/src-tauri/src/commands/media.rs b/desktop/src-tauri/src/commands/media.rs
+index 2092414..c100da5 100644
+--- a/desktop/src-tauri/src/commands/media.rs
++++ b/desktop/src-tauri/src/commands/media.rs
+@@ -426,6 +426,7 @@ async fn do_upload(
+         let keys = state.signing_keys()?;
+         sign_blossom_upload_auth(&keys, &sha256, expiry_secs, &base_url)?
+     };
++    let identity_assertion = crate::nip_fa::assertion_for_http_base(state, &base_url).await?;
+ 
+     let auth_header = format!(
+         "Nostr {}",
+@@ -440,6 +441,7 @@ async fn do_upload(
+         UploadAttempt {
+             url: format!("{base_url}/upload"),
+             auth_header: &auth_header,
++            identity_assertion: identity_assertion.as_deref(),
+             mime,
+             sha256: &sha256,
+             body: body.clone(),
+@@ -454,6 +456,7 @@ async fn do_upload(
+             UploadAttempt {
+                 url: format!("{base_url}/media/upload"),
+                 auth_header: &auth_header,
++                identity_assertion: identity_assertion.as_deref(),
+                 mime,
+                 sha256: &sha256,
+                 body,
+diff --git a/desktop/src-tauri/src/commands/media_download.rs b/desktop/src-tauri/src/commands/media_download.rs
+index 47d7652..1790a1b 100644
+--- a/desktop/src-tauri/src/commands/media_download.rs
++++ b/desktop/src-tauri/src/commands/media_download.rs
+@@ -272,6 +272,9 @@ pub(super) async fn fetch_blob_bytes_with_cap(
+     if let Some(auth) = mint_media_get_auth(state, &relay_base) {
+         req = req.header("authorization", auth);
+     }
++    if let Some(identity) = crate::nip_fa::assertion_for_http_base(state, &relay_base).await? {
++        req = req.header("Nostr-Federated-Identity", format!("Bearer {identity}"));
++    }
+ 
+     let request = req.send();
+     let resp = if let Some(cancellation) = cancellation {
+diff --git a/desktop/src-tauri/src/commands/media_upload_progress.rs b/desktop/src-tauri/src/commands/media_upload_progress.rs
+index 5ed3f78..2dd7344 100644
+--- a/desktop/src-tauri/src/commands/media_upload_progress.rs
++++ b/desktop/src-tauri/src/commands/media_upload_progress.rs
+@@ -62,6 +62,7 @@ pub(super) fn finish_media_upload(progress_id: Option<&str>) {
+ pub(super) struct UploadAttempt<'a> {
+     pub url: String,
+     pub auth_header: &'a str,
++    pub identity_assertion: Option<&'a str>,
+     pub mime: &'a str,
+     pub sha256: &'a str,
+     pub body: bytes::Bytes,
+@@ -76,18 +77,22 @@ pub(super) async fn send_upload_attempt(
+     let UploadAttempt {
+         url,
+         auth_header,
++        identity_assertion,
+         mime,
+         sha256,
+         body,
+         progress,
+         cancellation,
+     } = attempt;
+-    let req = state
++    let mut req = state
+         .http_client
+         .put(url)
+         .header("Authorization", auth_header)
+         .header("Content-Type", mime)
+         .header("X-SHA-256", sha256);
++    if let Some(assertion) = identity_assertion {
++        req = req.header("Nostr-Federated-Identity", format!("Bearer {assertion}"));
++    }
+ 
+     let response = if let Some((app, progress_id)) = progress {
+         let app = app.clone();
+diff --git a/desktop/src-tauri/src/huddle/pipeline.rs b/desktop/src-tauri/src/huddle/pipeline.rs
+index 1649a0a..e93cc5e 100644
+--- a/desktop/src-tauri/src/huddle/pipeline.rs
++++ b/desktop/src-tauri/src/huddle/pipeline.rs
+@@ -13,7 +13,7 @@ use std::{
+ };
+ 
+ use nostr::JsonUtil;
+-use tauri::State;
++use tauri::{Manager, State};
+ use uuid::Uuid;
+ 
+ use crate::app_state::AppState;
+@@ -697,6 +697,11 @@ pub(crate) fn spawn_transcription_task(
+         Err(_) => return,
+     };
+     let relay_base_url = crate::relay::relay_api_base_url_with_override(state);
++    let app_handle = state
++        .app_handle
++        .lock()
++        .ok()
++        .and_then(|handle| handle.clone());
+ 
+     tauri::async_runtime::spawn(async move {
+         // recv().await yields (not blocks) until text arrives or sender is dropped.
+@@ -763,14 +768,39 @@ pub(crate) fn spawn_transcription_task(
+                 }
+             };
+ 
++            let identity = if relay_base_url == crate::nip_fa::RELAY_HTTP_ORIGIN {
++                let Some(app) = app_handle.as_ref() else {
++                    eprintln!("buzz-desktop: platform voice relay identity unavailable");
++                    continue;
++                };
++                let app_state = app.state::<AppState>();
++                match crate::nip_fa::assertion_for_keys(
++                    &app_state,
++                    crate::nip_fa::PLATFORM_RELAY,
++                    &keys,
++                )
++                .await
++                {
++                    Ok(assertion) => Some(assertion),
++                    Err(_) => {
++                        eprintln!("buzz-desktop: platform voice relay identity refused");
++                        continue;
++                    }
++                }
++            } else {
++                None
++            };
++
+             let response = {
+-                http_client
++                let mut request = http_client
+                     .post(&url)
+                     .header("Authorization", auth_header)
+-                    .header("Content-Type", "application/json")
+-                    .body(body_bytes)
+-                    .send()
+-                    .await
++                    .header("Content-Type", "application/json");
++                if let Some(identity) = identity {
++                    request =
++                        request.header("Nostr-Federated-Identity", format!("Bearer {identity}"));
++                }
++                request.body(body_bytes).send().await
+             };
+ 
+             match response {
+diff --git a/desktop/src-tauri/src/lib.rs b/desktop/src-tauri/src/lib.rs
+index 4497eb7..a8e5bab 100644
+--- a/desktop/src-tauri/src/lib.rs
++++ b/desktop/src-tauri/src/lib.rs
+@@ -33,6 +33,7 @@ mod models;
+ mod native_relay_client;
+ mod native_websocket;
+ mod native_websocket_batch;
++mod nip_fa;
+ mod nostr_bind;
+ pub mod nostr_convert;
+ mod observed_unread;
+@@ -622,6 +623,9 @@ pub fn run() {
+             decrypt_observer_event,
+             build_observer_control_event,
+             create_auth_event,
++            nip_fa::nip_fa_login,
++            nip_fa::nip_fa_cancel_login,
++            nip_fa::nip_fa_logout,
+             nip44_encrypt_to_self,
+             nip44_decrypt_from_self,
+             get_channels,
+diff --git a/desktop/src-tauri/src/media_proxy.rs b/desktop/src-tauri/src/media_proxy.rs
+index 79128ec..fd23b9d 100644
+--- a/desktop/src-tauri/src/media_proxy.rs
++++ b/desktop/src-tauri/src/media_proxy.rs
+@@ -62,6 +62,14 @@ async fn proxy_handler(AxumState(state): AxumState<ProxyState>, req: Request) ->
+     if let Some(auth) = mint_media_get_auth(&app_state, &base_url) {
+         upstream = upstream.header("authorization", auth);
+     }
++    if let Some(identity) =
++        match crate::nip_fa::assertion_for_http_base(&app_state, &base_url).await {
++            Ok(value) => value,
++            Err(_) => return (StatusCode::UNAUTHORIZED, "Platform identity required").into_response(),
++        }
++    {
++        upstream = upstream.header("Nostr-Federated-Identity", format!("Bearer {identity}"));
++    }
+ 
+     if let Some(range) = req.headers().get("range") {
+         if let Ok(v) = range.to_str() {
+@@ -90,6 +98,11 @@ async fn proxy_handler(AxumState(state): AxumState<ProxyState>, req: Request) ->
+                 .get(&upstream_url)
+                 .timeout(std::time::Duration::from_secs(120))
+                 .header("authorization", fresh_auth);
++            if let Ok(Some(identity)) =
++                crate::nip_fa::assertion_for_http_base(&app_state, &base_url).await
++            {
++                retry = retry.header("Nostr-Federated-Identity", format!("Bearer {identity}"));
++            }
+             if let Some(range) = req.headers().get("range") {
+                 if let Ok(v) = range.to_str() {
+                     retry = retry.header("range", v);
+@@ -222,6 +235,12 @@ pub async fn handle_buzz_media(
+     if let Some(auth) = mint_media_get_auth(&state, &base) {
+         upstream = upstream.header("authorization", auth);
+     }
++    if let Some(identity) = match crate::nip_fa::assertion_for_http_base(&state, &base).await {
++        Ok(value) => value,
++        Err(_) => return error_response(401, "Platform identity required"),
++    } {
++        upstream = upstream.header("Nostr-Federated-Identity", format!("Bearer {identity}"));
++    }
+ 
+     if let Some(range) = request.headers().get("range") {
+         if let Ok(v) = range.to_str() {
+@@ -246,6 +265,11 @@ pub async fn handle_buzz_media(
+                     .get(&upstream_url)
+                     .timeout(std::time::Duration::from_secs(60))
+                     .header("authorization", fresh_auth);
++                if let Ok(Some(identity)) =
++                    crate::nip_fa::assertion_for_http_base(&state, &base).await
++                {
++                    retry = retry.header("Nostr-Federated-Identity", format!("Bearer {identity}"));
++                }
+                 if let Some(range) = request.headers().get("range") {
+                     if let Ok(v) = range.to_str() {
+                         retry = retry.header("range", v);
+diff --git a/desktop/src-tauri/src/native_relay_client.rs b/desktop/src-tauri/src/native_relay_client.rs
+index fd97f4b..74a8510 100644
+--- a/desktop/src-tauri/src/native_relay_client.rs
++++ b/desktop/src-tauri/src/native_relay_client.rs
+@@ -26,6 +26,7 @@ use std::{
+ 
+ use buzz_ws_client_pkg::{NostrWsConnection, RelayMessage};
+ use nostr::{Event, Keys};
++use tauri::{AppHandle, Manager};
+ use tokio::{
+     sync::{mpsc, oneshot, Mutex},
+     time::Instant,
+@@ -136,7 +137,12 @@ impl NativeRelayClient {
+     /// slot. Destructive on entry, so every caller must already hold proof it
+     /// is the current owner — today that is
+     /// [`crate::archive::sync::ArchiveOwnership`].
+-    async fn ensure_session(&self, relay_url: String, keys: Keys) -> Arc<RelaySession> {
++    async fn ensure_session(
++        &self,
++        relay_url: String,
++        keys: Keys,
++        app: Option<AppHandle>,
++    ) -> Arc<RelaySession> {
+         let scope = (relay_url.clone(), keys.public_key().to_hex());
+         let mut current = self.current.lock().await;
+         if let Some(managed) = current.as_ref().filter(|managed| managed.scope == scope) {
+@@ -145,7 +151,7 @@ impl NativeRelayClient {
+         if let Some(previous) = current.take() {
+             previous.session.shutdown();
+         }
+-        let session = start_managed(relay_url, keys, None);
++        let session = start_managed(relay_url, keys, None, app);
+         *current = Some(ManagedSession {
+             scope,
+             session: Arc::clone(&session),
+@@ -176,7 +182,12 @@ impl NativeRelayClient {
+     /// Filling an empty slot is deliberate: at startup the catalog fetch
+     /// commonly precedes archive sync, and installing here means the archive
+     /// start that follows reuses this socket instead of opening a second one.
+-    pub(crate) async fn session(&self, relay_url: String, keys: Keys) -> SessionLease {
++    pub(crate) async fn session(
++        &self,
++        app: Option<AppHandle>,
++        relay_url: String,
++        keys: Keys,
++    ) -> SessionLease {
+         let scope = (relay_url.clone(), keys.public_key().to_hex());
+         let mut current = self.current.lock().await;
+         if let Some(managed) = current.as_ref() {
+@@ -187,12 +198,12 @@ impl NativeRelayClient {
+                 }
+             } else {
+                 SessionLease {
+-                    session: start_managed(relay_url, keys, None),
++                    session: start_managed(relay_url, keys, None, app),
+                     private: true,
+                 }
+             };
+         }
+-        let session = start_managed(relay_url, keys, None);
++        let session = start_managed(relay_url, keys, None, app);
+         *current = Some(ManagedSession {
+             scope,
+             session: Arc::clone(&session),
+@@ -215,11 +226,12 @@ impl NativeRelayClient {
+     /// call. See [`crate::archive::sync::ArchiveOwnership`].
+     pub(crate) async fn archive_session(
+         &self,
++        app: Option<AppHandle>,
+         relay_url: String,
+         keys: Keys,
+         _ownership: &crate::archive::sync::ArchiveOwnership<'_>,
+     ) -> (Arc<RelaySession>, mpsc::Receiver<MatchedEvent>) {
+-        let session = self.ensure_session(relay_url, keys).await;
++        let session = self.ensure_session(relay_url, keys, app).await;
+         let event_rx = session.attach_archive().await;
+         (session, event_rx)
+     }
+@@ -439,12 +451,17 @@ pub(crate) async fn start(
+     keys: Keys,
+     auth_tag: Option<nostr::Tag>,
+ ) -> (Arc<RelaySession>, mpsc::Receiver<MatchedEvent>) {
+-    let session = start_managed(relay_url, keys, auth_tag);
++    let session = start_managed(relay_url, keys, auth_tag, None);
+     let events = session.attach_archive().await;
+     (session, events)
+ }
+ 
+-fn start_managed(relay_url: String, keys: Keys, auth_tag: Option<nostr::Tag>) -> Arc<RelaySession> {
++fn start_managed(
++    relay_url: String,
++    keys: Keys,
++    auth_tag: Option<nostr::Tag>,
++    app: Option<AppHandle>,
++) -> Arc<RelaySession> {
+     let (wake, wake_rx) = mpsc::channel(1);
+     let session = Arc::new(RelaySession {
+         state: Arc::new(Mutex::new(SessionState::default())),
+@@ -458,6 +475,7 @@ fn start_managed(relay_url: String, keys: Keys, auth_tag: Option<nostr::Tag>) ->
+         relay_url,
+         keys,
+         auth_tag,
++        app,
+         Arc::clone(&session),
+         wake_rx,
+     ));
+@@ -469,6 +487,7 @@ async fn run_session(
+     relay_url: String,
+     keys: Keys,
+     auth_tag: Option<nostr::Tag>,
++    app: Option<AppHandle>,
+     session: Arc<RelaySession>,
+     mut wake_rx: mpsc::Receiver<()>,
+ ) {
+@@ -478,8 +497,41 @@ async fn run_session(
+             return;
+         }
+ 
+-        let connecting =
+-            NostrWsConnection::connect_authenticated(&relay_url, &keys, auth_tag.as_ref());
++        let connecting = async {
++            let headers = if is_deployment_relay_url(&relay_url) {
++                let app = app.as_ref().ok_or_else(|| {
++                    "Platform identity assertion unavailable in this relay session".to_owned()
++                })?;
++                let state = app.state::<crate::app_state::AppState>();
++                let assertion =
++                    crate::nip_fa::assertion_for_keys(&state, crate::nip_fa::PLATFORM_RELAY, &keys)
++                        .await?;
++                let value = tokio_tungstenite::tungstenite::http::HeaderValue::from_str(&format!(
++                    "Bearer {assertion}"
++                ))
++                .map_err(|_| {
++                    "Platform identity assertion contains invalid header characters".to_owned()
++                })?;
++                let mut headers = tokio_tungstenite::tungstenite::http::HeaderMap::new();
++                headers.insert(
++                    tokio_tungstenite::tungstenite::http::HeaderName::from_static(
++                        "nostr-federated-identity",
++                    ),
++                    value,
++                );
++                headers
++            } else {
++                tokio_tungstenite::tungstenite::http::HeaderMap::new()
++            };
++            NostrWsConnection::connect_authenticated_with_headers(
++                &relay_url,
++                &keys,
++                auth_tag.as_ref(),
++                headers,
++            )
++            .await
++            .map_err(|error| error.to_string())
++        };
+         tokio::pin!(connecting);
+         let connected = loop {
+             tokio::select! {
+@@ -518,6 +570,30 @@ async fn run_session(
+     }
+ }
+ 
++fn is_deployment_relay_url(relay_url: &str) -> bool {
++    crate::relay::relay_ws_url_from_http(&crate::relay::relay_http_base_url(relay_url)).as_deref()
++        == Some(crate::nip_fa::PLATFORM_RELAY)
++}
++
++#[cfg(test)]
++mod nip_fi_tests {
++    use super::is_deployment_relay_url;
++
++    #[test]
++    fn native_sessions_match_the_deployment_by_canonical_origin() {
++        assert!(is_deployment_relay_url(crate::nip_fa::PLATFORM_RELAY));
++        assert!(is_deployment_relay_url(&format!("{}/custom/path?resume=1", crate::nip_fa::PLATFORM_RELAY)));
++        let mut evil = url::Url::parse(crate::nip_fa::PLATFORM_RELAY).unwrap();
++        let evil_host = format!("{}.evil.example", evil.host_str().unwrap());
++        evil.set_host(Some(&evil_host)).unwrap();
++        assert!(!is_deployment_relay_url(evil.as_str()));
++        let mut alternate_port = url::Url::parse(crate::nip_fa::PLATFORM_RELAY).unwrap();
++        alternate_port.set_port(Some(8443)).unwrap();
++        assert!(!is_deployment_relay_url(alternate_port.as_str()));
++        assert!(!is_deployment_relay_url("wss://relay.example"));
++    }
++}
++
+ /// Drives one connected socket until it drops or the session is cancelled.
+ async fn run_connection(
+     mut conn: NostrWsConnection,
+diff --git a/desktop/src-tauri/src/native_relay_client_tests.rs b/desktop/src-tauri/src/native_relay_client_tests.rs
+index ee284be..dd536fd 100644
+--- a/desktop/src-tauri/src/native_relay_client_tests.rs
++++ b/desktop/src-tauri/src/native_relay_client_tests.rs
+@@ -822,10 +822,10 @@ async fn a_stale_finite_request_cannot_displace_the_new_scopes_session() {
+     let scope_b = (scope_url(10), Keys::generate());
+ 
+     let archive_a = client
+-        .ensure_session(scope_a.0.clone(), scope_a.1.clone())
++        .ensure_session(scope_a.0.clone(), scope_a.1.clone(), None)
+         .await;
+     let archive_b = client
+-        .ensure_session(scope_b.0.clone(), scope_b.1.clone())
++        .ensure_session(scope_b.0.clone(), scope_b.1.clone(), None)
+         .await;
+     assert!(
+         archive_a.cancel.is_cancelled(),
+@@ -833,7 +833,9 @@ async fn a_stale_finite_request_cannot_displace_the_new_scopes_session() {
+     );
+ 
+     // Scope A's in-flight catalog/catch-up command, resuming late.
+-    let stale = client.session(scope_a.0.clone(), scope_a.1.clone()).await;
++    let stale = client
++        .session(None, scope_a.0.clone(), scope_a.1.clone())
++        .await;
+ 
+     assert!(
+         !archive_b.cancel.is_cancelled(),
+@@ -872,8 +874,10 @@ async fn a_same_scope_lease_shares_the_installed_session_and_never_ends_it() {
+     let client = NativeRelayClient::default();
+     let (relay_url, keys) = (scope_url(11), Keys::generate());
+ 
+-    let archive = client.ensure_session(relay_url.clone(), keys.clone()).await;
+-    let lease = client.session(relay_url.clone(), keys.clone()).await;
++    let archive = client
++        .ensure_session(relay_url.clone(), keys.clone(), None)
++        .await;
++    let lease = client.session(None, relay_url.clone(), keys.clone()).await;
+     assert!(
+         Arc::ptr_eq(&lease.session, &archive),
+         "a same-scope finite request must multiplex over the installed socket \
+@@ -901,7 +905,7 @@ async fn the_first_lease_installs_a_session_the_archive_then_reuses() {
+     let client = NativeRelayClient::default();
+     let (relay_url, keys) = (scope_url(12), Keys::generate());
+ 
+-    let lease = client.session(relay_url.clone(), keys.clone()).await;
++    let lease = client.session(None, relay_url.clone(), keys.clone()).await;
+     let leased = lease.handle();
+     drop(lease);
+     assert!(
+@@ -910,7 +914,7 @@ async fn the_first_lease_installs_a_session_the_archive_then_reuses() {
+          session the archive is about to reuse"
+     );
+ 
+-    let archive = client.ensure_session(relay_url, keys).await;
++    let archive = client.ensure_session(relay_url, keys, None).await;
+     assert!(
+         Arc::ptr_eq(&archive, &leased),
+         "the archive start must reuse the installed session rather than \
+diff --git a/desktop/src-tauri/src/native_websocket.rs b/desktop/src-tauri/src/native_websocket.rs
+index a7a51fb..2da4e0b 100644
+--- a/desktop/src-tauri/src/native_websocket.rs
++++ b/desktop/src-tauri/src/native_websocket.rs
+@@ -5,13 +5,14 @@ use serde::{Deserialize, Serialize};
+ use tauri::{
+     ipc::{Channel, InvokeResponseBody},
+     plugin::TauriPlugin,
+-    Manager, Runtime,
++    Manager,
+ };
+ 
+ use crate::native_websocket_batch::{is_auth_challenge, FrameBatch, BATCH_MAX_SERIALIZED_BYTES};
+ use tokio::sync::{mpsc, oneshot, Mutex};
+ use tokio_tungstenite::{
+     connect_async,
++    tungstenite::client::IntoClientRequest,
+     tungstenite::protocol::{frame::coding::CloseCode, CloseFrame, Message},
+ };
+ use tokio_util::sync::CancellationToken;
+@@ -21,6 +22,28 @@ const WRITE_TIMEOUT: Duration = Duration::from_secs(10);
+ const SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(250);
+ const SEND_QUEUE_CAPACITY: usize = 64;
+ 
++fn build_connect_request(
++    url: &str,
++    identity: Option<&str>,
++) -> Result<tokio_tungstenite::tungstenite::http::Request<()>, String> {
++    let mut request = url
++        .into_client_request()
++        .map_err(|error| error.to_string())?;
++    if url == crate::nip_fa::PLATFORM_RELAY {
++        let assertion = identity.ok_or_else(|| "Platform identity assertion required".to_owned())?;
++        request.headers_mut().insert(
++            tokio_tungstenite::tungstenite::http::header::HeaderName::from_static(
++                "nostr-federated-identity",
++            ),
++            tokio_tungstenite::tungstenite::http::HeaderValue::from_str(&format!(
++                "Bearer {assertion}"
++            ))
++            .map_err(|_| "identity assertion contains invalid header characters".to_owned())?,
++        );
++    }
++    Ok(request)
++}
++
+ pub(crate) fn install_crypto_provider() {
+     // Dependencies enable both rustls providers; choose one before TLS setup.
+     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+@@ -128,14 +151,26 @@ impl WebSocketManager {
+ }
+ 
+ async fn open_connection(
++    app: Option<&tauri::AppHandle>,
+     manager: &WebSocketManager,
+     url: &str,
+     on_message: Channel<InvokeResponseBody>,
+ ) -> Result<Id, String> {
+     let connect_cancel = manager.connect_cancel.lock().await.clone();
++    let request = if url == crate::nip_fa::PLATFORM_RELAY {
++        let app = app.ok_or_else(|| "desktop application state unavailable".to_owned())?;
++        let app_state = app.state::<crate::app_state::AppState>();
++        let assertion = tokio::select! {
++            _ = connect_cancel.cancelled() => return Err("WebSocket connection cancelled".to_string()),
++            result = crate::nip_fa::assertion(&app_state, url) => result?,
++        };
++        build_connect_request(url, Some(&assertion))?
++    } else {
++        build_connect_request(url, None)?
++    };
+     let (socket, _) = tokio::select! {
+         _ = connect_cancel.cancelled() => return Err("WebSocket connection cancelled".to_string()),
+-        result = tokio::time::timeout(CONNECT_TIMEOUT, connect_async(url)) => result
++        result = tokio::time::timeout(CONNECT_TIMEOUT, connect_async(request)) => result
+             .map_err(|_| "WebSocket connection timed out".to_string())?
+             .map_err(|error| error.to_string())?,
+     };
+@@ -180,12 +215,13 @@ async fn open_connection(
+ 
+ #[tauri::command]
+ async fn connect(
++    app: tauri::AppHandle,
+     manager: tauri::State<'_, WebSocketManager>,
+     url: String,
+     on_message: Channel<InvokeResponseBody>,
+     _config: Option<serde_json::Value>,
+ ) -> Result<Id, String> {
+-    open_connection(manager.inner(), &url, on_message).await
++    open_connection(Some(&app), manager.inner(), &url, on_message).await
+ }
+ 
+ pub(crate) async fn send_message(
+@@ -349,7 +385,7 @@ fn outbound_message(message: Message) -> OutboundMessage {
+     }
+ }
+ 
+-pub fn init<R: Runtime>() -> TauriPlugin<R> {
++pub fn init() -> TauriPlugin<tauri::Wry> {
+     install_crypto_provider();
+     tauri::plugin::Builder::new("websocket")
+         .invoke_handler(tauri::generate_handler![
+@@ -372,6 +408,19 @@ mod tests {
+     use futures_util::FutureExt;
+     use std::sync::atomic::{AtomicBool, Ordering};
+ 
++    #[test]
++    fn deployment_websocket_requires_and_attaches_identity_header() {
++        assert!(build_connect_request(crate::nip_fa::PLATFORM_RELAY, None).is_err());
++        let request =
++            build_connect_request(crate::nip_fa::PLATFORM_RELAY, Some("compact.jwt.sig")).unwrap();
++        assert_eq!(
++            request.headers()["nostr-federated-identity"],
++            "Bearer compact.jwt.sig"
++        );
++        let other = build_connect_request("wss://relay.example", None).unwrap();
++        assert!(!other.headers().contains_key("nostr-federated-identity"));
++    }
++
+     use tokio::io::duplex;
+     use tokio_tungstenite::{tungstenite::protocol::Role, WebSocketStream};
+ 
+@@ -640,7 +689,7 @@ mod tests {
+         });
+ 
+         let manager = WebSocketManager::default();
+-        let id = open_connection(&manager, &format!("ws://{address}"), silent_channel())
++        let id = open_connection(None, &manager, &format!("ws://{address}"), silent_channel())
+             .await
+             .unwrap();
+         send_message(&manager, id, WebSocketMessage::Text("live-probe".into()))
+diff --git a/desktop/src-tauri/src/nip_fa.rs b/desktop/src-tauri/src/nip_fa.rs
+new file mode 100644
+index 0000000..e377a7a
+--- /dev/null
++++ b/desktop/src-tauri/src/nip_fa.rs
+@@ -0,0 +1,849 @@
++//! Native NIP-FA login and assertion client for this deployment.
++//!
++//! Adapter session credentials stay in the OS keyring. NIP-FI assertions are
++//! short lived and are fetched for the exact relay/key immediately before use.
++
++use std::{
++    sync::{
++        atomic::{AtomicU64, Ordering},
++        Arc, OnceLock,
++    },
++    time::Duration,
++};
++
++use axum::{
++    extract::{Query, State as AxumState},
++    http::StatusCode,
++    response::IntoResponse,
++    routing::get,
++    Router,
++};
++use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
++use serde::{Deserialize, Serialize};
++use sha2::{Digest, Sha256};
++use tauri::ipc::Channel;
++use tokio::{net::TcpListener, sync::oneshot};
++use tokio_util::sync::CancellationToken;
++use url::Url;
++
++pub const IDENTITY_ORIGIN: &str = match option_env!("BUZZ_IDENTITY_ORIGIN") {
++    Some(value) => value,
++    None => "https://identity.example.invalid",
++};
++pub const PLATFORM_RELAY: &str = match option_env!("BUZZ_RELAY_URL") {
++    Some(value) => value,
++    None => "wss://relay.example.invalid",
++};
++pub const RELAY_HTTP_ORIGIN: &str = match option_env!("BUZZ_RELAY_HTTP_ORIGIN") {
++    Some(value) => value,
++    None => "https://relay.example.invalid",
++};
++const KEYRING_ITEM: &str = concat!("nip-fa-session:", env!("BUZZ_DESKTOP_PROFILE"));
++const LOGIN_TIMEOUT: Duration = Duration::from_secs(600);
++const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
++const KEYRING_IO_TIMEOUT: Duration = Duration::from_secs(5);
++static NEXT_LOGIN_ID: AtomicU64 = AtomicU64::new(1);
++
++fn session_store_lock() -> &'static Arc<tokio::sync::Mutex<()>> {
++    static LOCK: OnceLock<Arc<tokio::sync::Mutex<()>>> = OnceLock::new();
++    LOCK.get_or_init(|| Arc::new(tokio::sync::Mutex::new(())))
++}
++
++#[derive(Default)]
++struct AuthFlowState {
++    active_login: Option<(u64, CancellationToken)>,
++    logout_in_progress: bool,
++}
++
++fn auth_flow_state() -> &'static tokio::sync::Mutex<AuthFlowState> {
++    static STATE: OnceLock<tokio::sync::Mutex<AuthFlowState>> = OnceLock::new();
++    STATE.get_or_init(|| tokio::sync::Mutex::new(AuthFlowState::default()))
++}
++
++struct AbortOnDrop(tokio::task::JoinHandle<()>);
++impl Drop for AbortOnDrop {
++    fn drop(&mut self) {
++        self.0.abort();
++    }
++}
++
++#[derive(Clone, Serialize, Deserialize)]
++struct StoredSession {
++    token: String,
++}
++
++#[derive(Debug, Clone, Copy, Serialize)]
++#[serde(rename_all = "snake_case")]
++pub enum LogoutOutcome {
++    GrantsRevoked,
++    SessionAlreadyInvalid,
++    NoLocalSession,
++}
++
++#[derive(Debug)]
++enum SessionCheckError {
++    Expired,
++    Other(String),
++}
++impl std::fmt::Display for SessionCheckError {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        match self {
++            Self::Expired => f.write_str("identity session expired; sign in again"),
++            Self::Other(error) => f.write_str(error),
++        }
++    }
++}
++impl std::fmt::Debug for StoredSession {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        f.write_str("StoredSession([REDACTED])")
++    }
++}
++
++#[derive(Debug, Deserialize)]
++struct LoginExchange {
++    session_token: String,
++    expires_at: String,
++}
++#[derive(Debug, Deserialize)]
++struct SessionCheck {
++    expires_at: String,
++    email: Option<String>,
++}
++#[derive(Deserialize)]
++struct AssertionResponse {
++    assertion: String,
++    nostr_pubkey: String,
++    expires_at: i64,
++}
++#[derive(Deserialize)]
++struct AdapterErrorBody {
++    error: Option<String>,
++}
++#[derive(Debug, Deserialize)]
++struct CallbackQuery {
++    code: Option<String>,
++    error: Option<String>,
++    state: Option<String>,
++}
++
++struct CallbackState {
++    expected_state: String,
++    sender: Option<oneshot::Sender<Result<String, String>>>,
++}
++
++fn secret_store() -> &'static crate::secret_store::SecretStore {
++    crate::secret_store::SecretStore::shared(crate::app_state::keyring_service())
++}
++
++async fn load_session() -> Result<Option<StoredSession>, String> {
++    run_session_store_io(session_store_lock().clone(), KEYRING_IO_TIMEOUT, || {
++        secret_store()
++            .load_all_readonly()?
++            .and_then(|entries| entries.get(KEYRING_ITEM).cloned())
++            .map(|s| {
++                serde_json::from_str(&s).map_err(|_| "stored NIP-FA session is corrupt".to_owned())
++            })
++            .transpose()
++    })
++    .await
++}
++
++async fn save_session(session: StoredSession, cancel: CancellationToken) -> Result<(), String> {
++    run_session_store_io(
++        session_store_lock().clone(),
++        KEYRING_IO_TIMEOUT,
++        move || {
++            if cancel.is_cancelled() {
++                return Err("Platform sign-in cancelled".to_owned());
++            }
++            let value = serde_json::to_string(&session)
++                .map_err(|_| "could not encode NIP-FA session".to_owned())?;
++            let store = secret_store();
++            store.store(KEYRING_ITEM, &value)?;
++            if cancel.is_cancelled() {
++                store.delete(KEYRING_ITEM)?;
++                return Err("Platform sign-in cancelled".to_owned());
++            }
++            Ok(())
++        },
++    )
++    .await
++}
++
++async fn clear_session() -> Result<(), String> {
++    run_session_store_io(session_store_lock().clone(), KEYRING_IO_TIMEOUT, || {
++        secret_store().delete(KEYRING_ITEM)
++    })
++    .await
++}
++
++async fn run_session_store_io<T, F>(
++    lock: Arc<tokio::sync::Mutex<()>>,
++    timeout: Duration,
++    operation: F,
++) -> Result<T, String>
++where
++    T: Send + 'static,
++    F: FnOnce() -> Result<T, String> + Send + 'static,
++{
++    let deadline = tokio::time::Instant::now() + timeout;
++    let guard = tokio::time::timeout_at(deadline, lock.lock_owned())
++        .await
++        .map_err(|_| keyring_timeout_error(timeout))?;
++    let (sender, receiver) = tokio::sync::oneshot::channel();
++    tokio::spawn(async move {
++        let _guard = guard;
++        let result = tokio::task::spawn_blocking(operation)
++            .await
++            .map_err(|error| format!("secure credential storage task failed: {error}"))
++            .and_then(|result| result);
++        let _ = sender.send(result);
++    });
++    match tokio::time::timeout_at(deadline, receiver).await {
++        Ok(Ok(result)) => result,
++        Ok(Err(_)) => Err("secure credential storage task stopped".to_owned()),
++        Err(_) => Err(keyring_timeout_error(timeout)),
++    }
++}
++
++fn keyring_timeout_error(timeout: Duration) -> String {
++    format!(
++        "OS credential storage did not respond within {} seconds; check for a macOS keychain approval prompt or unlock the login keychain, then retry",
++        timeout.as_secs_f64()
++    )
++}
++
++fn handoff_challenge(secret: &str) -> String {
++    URL_SAFE_NO_PAD.encode(Sha256::digest(secret.as_bytes()))
++}
++
++async fn callback(
++    Query(query): Query<CallbackQuery>,
++    AxumState(state): AxumState<std::sync::Arc<tokio::sync::Mutex<CallbackState>>>,
++) -> impl IntoResponse {
++    let mut state = state.lock().await;
++    if query.state.as_deref() != Some(state.expected_state.as_str()) {
++        return (
++            StatusCode::BAD_REQUEST,
++            "Buzz ignored an invalid sign-in callback. Return to the desktop app.",
++        );
++    }
++    let was_refused = query.error.is_some();
++    let result = match (query.code, query.error) {
++        (Some(code), None) if !code.is_empty() => Ok(code),
++        (_, Some(_)) => Err("identity provider login was refused".to_owned()),
++        _ => Err("identity provider returned an invalid callback".to_owned()),
++    };
++    if let Some(sender) = state.sender.take() {
++        let _ = sender.send(result);
++    }
++    if was_refused {
++        (
++            StatusCode::UNAUTHORIZED,
++            "Platform sign-in was refused. You can return to the desktop app.",
++        )
++    } else {
++        (
++            StatusCode::OK,
++            "Buzz sign-in complete. You can return to the desktop app.",
++        )
++    }
++}
++
++/// Run the NIP-FA loopback handoff, exchange, and mandatory fixed-session check.
++pub async fn login(on_handoff_url: Channel<String>) -> Result<String, String> {
++    let login_id = NEXT_LOGIN_ID.fetch_add(1, Ordering::Relaxed);
++    let cancel = CancellationToken::new();
++    {
++        let mut state = auth_flow_state().lock().await;
++        if state.logout_in_progress {
++            return Err("Platform sign-out is in progress; retry sign-in when it finishes".to_owned());
++        }
++        if let Some((_, previous)) = state.active_login.replace((login_id, cancel.clone())) {
++            previous.cancel();
++        }
++    }
++    let result = tokio::select! {
++        _ = cancel.cancelled() => Err("Platform sign-in cancelled".to_owned()),
++        result = login_flow(on_handoff_url, cancel.clone()) => result,
++    };
++    finish_login(login_id).await;
++    result
++}
++
++async fn login_flow(
++    on_handoff_url: Channel<String>,
++    cancel: CancellationToken,
++) -> Result<String, String> {
++    if let Some(session) = load_session().await? {
++        let client = identity_client()?;
++        match check_session(&client, &session.token).await {
++            Ok(check) => return Ok(check.email.unwrap_or_else(|| "Platform account".to_owned())),
++            Err(SessionCheckError::Expired) => {}
++            Err(error) => return Err(error.to_string()),
++        }
++    }
++    login_with_browser(on_handoff_url, cancel).await
++}
++
++fn identity_client() -> Result<reqwest::Client, String> {
++    reqwest::Client::builder()
++        .redirect(reqwest::redirect::Policy::none())
++        .build()
++        .map_err(|e| e.to_string())
++}
++
++async fn finish_login(login_id: u64) {
++    let mut state = auth_flow_state().lock().await;
++    if state
++        .active_login
++        .as_ref()
++        .is_some_and(|(active_id, _)| *active_id == login_id)
++    {
++        state.active_login = None;
++    }
++}
++
++async fn cancel_pending_login() -> bool {
++    if let Some((_, token)) = auth_flow_state().lock().await.active_login.take() {
++        token.cancel();
++        true
++    } else {
++        false
++    }
++}
++
++async fn login_with_browser(
++    on_handoff_url: Channel<String>,
++    cancel: CancellationToken,
++) -> Result<String, String> {
++    let listener = TcpListener::bind("127.0.0.1:0")
++        .await
++        .map_err(|e| format!("could not bind sign-in callback: {e}"))?;
++    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
++    let mut callback_url =
++        Url::parse(&format!("http://127.0.0.1:{port}/callback")).map_err(|e| e.to_string())?;
++    let mut state_bytes = [0u8; 32];
++    getrandom::getrandom(&mut state_bytes)
++        .map_err(|_| "secure random source unavailable".to_owned())?;
++    let state = URL_SAFE_NO_PAD.encode(state_bytes);
++    callback_url.query_pairs_mut().append_pair("state", &state);
++    // Generate a high entropy handoff secret and derive the S256 challenge.
++    let mut secret = [0u8; 32];
++    getrandom::getrandom(&mut secret).map_err(|_| "secure random source unavailable".to_owned())?;
++    let handoff = URL_SAFE_NO_PAD.encode(secret);
++    let challenge = handoff_challenge(&handoff);
++    let mut start =
++        Url::parse(&format!("{IDENTITY_ORIGIN}/v1/login/start")).map_err(|e| e.to_string())?;
++    start
++        .query_pairs_mut()
++        .append_pair("return_to", callback_url.as_str())
++        .append_pair("handoff_challenge", &challenge)
++        .append_pair("handoff_challenge_method", "S256");
++    let (sender, receiver) = oneshot::channel();
++    let router = Router::new()
++        .route("/callback", get(callback))
++        .with_state(std::sync::Arc::new(tokio::sync::Mutex::new(
++            CallbackState {
++                expected_state: state,
++                sender: Some(sender),
++            },
++        )));
++    let server = tokio::spawn(async move {
++        let _ = axum::serve(listener, router).await;
++    });
++    let _server_guard = AbortOnDrop(server);
++    on_handoff_url
++        .send(start.as_str().to_owned())
++        .map_err(|_| "sign-in link could not be delivered to the desktop".to_owned())?;
++    if std::env::var_os("BUZZ_NIP_FA_LOG_HANDOFF_URL").is_some() {
++        eprintln!("buzz-desktop: NIP-FA short-lived handoff URL: {start}");
++    }
++    let result = async {
++        let code = tokio::time::timeout(LOGIN_TIMEOUT, receiver)
++            .await
++            .map_err(|_| "identity login timed out".to_owned())?
++            .map_err(|_| "identity login callback stopped".to_owned())??;
++        let client = identity_client()?;
++        let response = client
++            .post(format!("{IDENTITY_ORIGIN}/v1/login/exchange"))
++            .json(&serde_json::json!({"code":code,"handoff_secret":handoff}))
++            .timeout(REQUEST_TIMEOUT)
++            .send()
++            .await
++            .map_err(|e| format!("identity code exchange failed: {e}"))?;
++        if response.status().is_redirection() {
++            return Err("identity code exchange refused a redirect".to_owned());
++        }
++        if !response.status().is_success() {
++            return Err(format!(
++                "identity code exchange returned HTTP {}",
++                response.status()
++            ));
++        }
++        let exchanged: LoginExchange = response
++            .json()
++            .await
++            .map_err(|_| "invalid identity code exchange response".to_owned())?;
++        if exchanged.session_token.is_empty() {
++            return Err("identity adapter returned an empty session".to_owned());
++        }
++        let check = check_session(&client, &exchanged.session_token)
++            .await
++            .map_err(|error| error.to_string())?;
++        let a = chrono::DateTime::parse_from_rfc3339(&exchanged.expires_at)
++            .map_err(|_| "invalid exchange expiry".to_owned())?;
++        let b = chrono::DateTime::parse_from_rfc3339(&check.expires_at)
++            .map_err(|_| "invalid session expiry".to_owned())?;
++        if a != b {
++            return Err("identity session expiry changed during verification".to_owned());
++        }
++        save_session(
++            StoredSession {
++                token: exchanged.session_token,
++            },
++            cancel.clone(),
++        )
++        .await?;
++        Ok(check.email.unwrap_or_else(|| "Platform account".to_owned()))
++    };
++    result.await
++}
++
++#[tauri::command]
++pub async fn nip_fa_login(on_handoff_url: Channel<String>) -> Result<String, String> {
++    login(on_handoff_url).await
++}
++
++#[tauri::command]
++pub async fn nip_fa_cancel_login() -> bool {
++    cancel_pending_login().await
++}
++
++#[tauri::command]
++pub async fn nip_fa_logout() -> Result<LogoutOutcome, String> {
++    {
++        let mut state = auth_flow_state().lock().await;
++        state.logout_in_progress = true;
++        if let Some((_, token)) = state.active_login.take() {
++            token.cancel();
++        }
++    }
++    let result = logout_flow().await;
++    auth_flow_state().lock().await.logout_in_progress = false;
++    result
++}
++
++async fn logout_flow() -> Result<LogoutOutcome, String> {
++    let Some(session) = load_session().await? else {
++        return Ok(LogoutOutcome::NoLocalSession);
++    };
++    let client = identity_client()?;
++    let response = client
++        .post(format!("{IDENTITY_ORIGIN}/v1/logout"))
++        .bearer_auth(&session.token)
++        .timeout(REQUEST_TIMEOUT)
++        .send()
++        .await
++        .map_err(|e| format!("identity logout failed: {e}"))?;
++    if response.status().is_redirection() {
++        return Err("identity logout refused a redirect".to_owned());
++    }
++    if response.status().is_success() {
++        clear_session().await?;
++        return Ok(LogoutOutcome::GrantsRevoked);
++    }
++    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
++        clear_session().await?;
++        return Ok(LogoutOutcome::SessionAlreadyInvalid);
++    }
++    Err(format!(
++        "identity logout returned HTTP {}",
++        response.status()
++    ))
++}
++
++async fn check_session(
++    client: &reqwest::Client,
++    token: &str,
++) -> Result<SessionCheck, SessionCheckError> {
++    let mut last_error = None;
++    let mut accepted = None;
++    for attempt in 0..3 {
++        match client
++            .get(format!("{IDENTITY_ORIGIN}/v1/session"))
++            .bearer_auth(token)
++            .timeout(REQUEST_TIMEOUT)
++            .send()
++            .await
++        {
++            Ok(response)
++                if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS
++                    || response.status().is_server_error() =>
++            {
++                let delay = retry_delay(
++                    attempt,
++                    response.headers().get(reqwest::header::RETRY_AFTER),
++                );
++                last_error = Some(format!(
++                    "identity session check returned HTTP {}",
++                    response.status()
++                ));
++                if attempt < 2 {
++                    tokio::time::sleep(delay).await;
++                    continue;
++                }
++                accepted = Some(response);
++            }
++            Ok(response) => accepted = Some(response),
++            Err(error) => {
++                last_error = Some(format!("identity session check failed: {error}"));
++                if attempt < 2 {
++                    tokio::time::sleep(retry_delay(attempt, None)).await;
++                    continue;
++                }
++            }
++        }
++        break;
++    }
++    let response = accepted.ok_or_else(|| {
++        SessionCheckError::Other(
++            last_error.unwrap_or_else(|| "identity session check failed".to_owned()),
++        )
++    })?;
++    if response.status().is_redirection() {
++        return Err(SessionCheckError::Other(
++            "identity session check refused a redirect".to_owned(),
++        ));
++    }
++    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
++        clear_session().await.map_err(SessionCheckError::Other)?;
++        return Err(SessionCheckError::Expired);
++    }
++    if !response.status().is_success() {
++        return Err(SessionCheckError::Other(format!(
++            "identity session check returned HTTP {}",
++            response.status()
++        )));
++    }
++    response
++        .json()
++        .await
++        .map_err(|_| SessionCheckError::Other("invalid identity session response".to_owned()))
++}
++
++fn retry_delay(attempt: u32, retry_after: Option<&reqwest::header::HeaderValue>) -> Duration {
++    let suggested = retry_after
++        .and_then(|value| value.to_str().ok())
++        .and_then(|value| {
++            value.parse::<u64>().ok().or_else(|| {
++                chrono::DateTime::parse_from_rfc2822(value)
++                    .ok()
++                    .map(|retry_at| {
++                        (retry_at.timestamp() - chrono::Utc::now().timestamp()).max(0) as u64
++                    })
++            })
++        });
++    Duration::from_millis(
++        suggested
++            .map(|seconds| seconds.saturating_mul(1000).min(1000))
++            .unwrap_or(150 + attempt as u64 * 200),
++    )
++}
++
++/// Mint a NIP-FA assertion bound to the exact key and canonical relay URL.
++pub async fn assertion(
++    state: &crate::app_state::AppState,
++    relay_url: &str,
++) -> Result<String, String> {
++    let keys = state.signing_keys()?;
++    assertion_for_keys(state, relay_url, &keys).await
++}
++
++pub async fn assertion_for_http_base(
++    state: &crate::app_state::AppState,
++    http_base: &str,
++) -> Result<Option<String>, String> {
++    if http_base.trim_end_matches('/') != RELAY_HTTP_ORIGIN {
++        return Ok(None);
++    }
++    assertion(state, PLATFORM_RELAY).await.map(Some)
++}
++
++pub async fn assertion_for_keys(
++    state: &crate::app_state::AppState,
++    relay_url: &str,
++    keys: &nostr::Keys,
++) -> Result<String, String> {
++    if relay_url != PLATFORM_RELAY {
++        return Err("NIP-FA is configured only for the platform deployment relay".to_owned());
++    }
++    if state.signing_keys()?.public_key() != keys.public_key() {
++        return Err("agent-key NIP-FI grants are not enabled in this desktop deployment".to_owned());
++    }
++    let session = load_session().await?.ok_or_else(|| {
++        "sign in to platform in Settings → Profile → platform sign-in before connecting".to_owned()
++    })?;
++    let client = identity_client()?;
++    check_session(&client, &session.token)
++        .await
++        .map_err(|error| error.to_string())?;
++    let pubkey = keys.public_key().to_hex();
++    let endpoint = format!("{IDENTITY_ORIGIN}/v1/identity/assertions");
++    let body =
++        serde_json::to_vec(&serde_json::json!({"relay_url":relay_url,"nostr_pubkey":pubkey}))
++            .map_err(|e| e.to_string())?;
++    let response = {
++        let mut last_error = None;
++        let mut accepted = None;
++        for attempt in 0..3 {
++            let proof = crate::relay::build_nip98_auth_header_for_keys(
++                keys,
++                &reqwest::Method::POST,
++                &endpoint,
++                &body,
++            )?;
++            let request = client
++                .post(&endpoint)
++                .bearer_auth(&session.token)
++                .header("Nostr-Authorization", proof)
++                .header("Content-Type", "application/json")
++                .body(body.clone())
++                .timeout(REQUEST_TIMEOUT);
++            match request.send().await {
++                Ok(response)
++                    if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS
++                        || response.status().is_server_error() =>
++                {
++                    let delay = retry_delay(
++                        attempt,
++                        response.headers().get(reqwest::header::RETRY_AFTER),
++                    );
++                    last_error = Some(format!(
++                        "identity assertion request returned HTTP {}",
++                        response.status()
++                    ));
++                    if attempt < 2 {
++                        tokio::time::sleep(delay).await;
++                        continue;
++                    }
++                    accepted = Some(response);
++                }
++                Ok(response) => accepted = Some(response),
++                Err(error) => {
++                    last_error = Some(format!("identity assertion request failed: {error}"));
++                    if attempt < 2 {
++                        tokio::time::sleep(retry_delay(attempt, None)).await;
++                        continue;
++                    }
++                }
++            }
++            break;
++        }
++        accepted.ok_or_else(|| {
++            last_error.unwrap_or_else(|| "identity assertion request failed".to_owned())
++        })?
++    };
++    if response.status().is_redirection() {
++        return Err("identity assertion request refused a redirect".to_owned());
++    }
++    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
++        clear_session().await?;
++        return Err("identity session expired; sign in again".to_owned());
++    }
++    if response.status() == reqwest::StatusCode::FORBIDDEN {
++        let code = response
++            .json::<AdapterErrorBody>()
++            .await
++            .ok()
++            .and_then(|body| body.error);
++        return Err(match code.as_deref() {
++            Some("binding_mismatch") => "This platform Google account does not own the Buzz key. Sign out in Settings → Profile → platform sign-in, then sign in with the enrolled account.".to_owned(),
++            Some("authorization_denied") => "Platform refused this identity assertion; check that this account is approved for the deployment.".to_owned(),
++            _ => "Platform refused this identity assertion; check platform deployment access.".to_owned(),
++        });
++    }
++    if !response.status().is_success() {
++        return Err(format!(
++            "identity assertion request returned HTTP {}",
++            response.status()
++        ));
++    }
++    let answer: AssertionResponse = response
++        .json()
++        .await
++        .map_err(|_| "identity assertion response was malformed".to_owned())?;
++    let now = chrono::Utc::now().timestamp();
++    if answer.nostr_pubkey != pubkey
++        || answer.assertion.is_empty()
++        || answer.expires_at <= now
++        || answer.expires_at - now > 300
++        || !valid_assertion(&answer.assertion, answer.expires_at)
++    {
++        return Err("identity assertion response failed key or expiry checks".to_owned());
++    }
++    Ok(answer.assertion)
++}
++
++fn valid_assertion(token: &str, response_exp: i64) -> bool {
++    let mut parts = token.split('.');
++    let (Some(header), Some(claims), Some(signature), None) =
++        (parts.next(), parts.next(), parts.next(), parts.next())
++    else {
++        return false;
++    };
++    if header.is_empty() || signature.is_empty() {
++        return false;
++    }
++    let Ok(header) = URL_SAFE_NO_PAD.decode(header) else {
++        return false;
++    };
++    let Ok(header) = serde_json::from_slice::<serde_json::Value>(&header) else {
++        return false;
++    };
++    let Ok(claims) = URL_SAFE_NO_PAD.decode(claims) else {
++        return false;
++    };
++    let Ok(claims) = serde_json::from_slice::<serde_json::Value>(&claims) else {
++        return false;
++    };
++    let Some(exp) = claims.get("exp").and_then(|v| v.as_i64()) else {
++        return false;
++    };
++    let Some(iat) = claims.get("iat").and_then(|v| v.as_i64()) else {
++        return false;
++    };
++    header.get("typ").and_then(|v| v.as_str()) == Some("nip-fi+jwt")
++        && exp == response_exp
++        && exp > iat
++        && exp - iat <= 300
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn deployment_relay_is_a_canonical_origin() {
++        let relay = Url::parse(PLATFORM_RELAY).unwrap();
++        assert_eq!(relay.scheme(), "wss");
++        assert!(relay.username().is_empty());
++        assert!(relay.password().is_none());
++        assert_eq!(relay.path(), "/");
++        assert!(relay.query().is_none());
++        assert!(relay.fragment().is_none());
++    }
++
++    #[test]
++    fn credentials_are_debug_redacted() {
++        let session = StoredSession {
++            token: "do-not-log-this".into(),
++        };
++        assert!(!format!("{session:?}").contains("do-not-log-this"));
++    }
++
++    #[test]
++    fn handoff_challenge_uses_pkce_s256_over_verifier_text() {
++        assert_eq!(
++            handoff_challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"),
++            "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
++        );
++    }
++
++    #[test]
++    fn retry_after_is_honored_with_a_bounded_wait() {
++        let retry_after = reqwest::header::HeaderValue::from_static("10");
++        assert_eq!(retry_delay(0, Some(&retry_after)), Duration::from_secs(1));
++        assert_eq!(retry_delay(0, None), Duration::from_millis(150));
++    }
++
++    #[test]
++    fn assertion_response_must_be_a_well_formed_nip_fi_jwt() {
++        let header = URL_SAFE_NO_PAD.encode(r#"{"typ":"nip-fi+jwt"}"#);
++        let claims = URL_SAFE_NO_PAD.encode(r#"{"iat":1790000000,"exp":1790000300}"#);
++        let token = format!("{header}.{claims}.signature");
++        assert!(valid_assertion(&token, 1790000300));
++        assert!(!valid_assertion(&token, 1790000301));
++        let wrong = format!(
++            "{}.{}.sig",
++            URL_SAFE_NO_PAD.encode(r#"{"typ":"JWT"}"#),
++            claims
++        );
++        assert!(!valid_assertion(&wrong, 1790000300));
++    }
++
++    #[tokio::test]
++    async fn timed_out_keyring_read_keeps_single_flight_gate_until_io_finishes() {
++        use std::sync::atomic::{AtomicBool, Ordering};
++
++        let lock = Arc::new(tokio::sync::Mutex::new(()));
++        let first_finished = Arc::new(AtomicBool::new(false));
++        let first_done = first_finished.clone();
++        let result = run_session_store_io(lock.clone(), Duration::from_millis(10), move || {
++            std::thread::sleep(Duration::from_millis(80));
++            first_done.store(true, Ordering::SeqCst);
++            Ok(())
++        })
++        .await;
++        assert!(result.unwrap_err().contains("did not respond"));
++
++        let duplicate_started = Arc::new(AtomicBool::new(false));
++        let duplicate = duplicate_started.clone();
++        let result = run_session_store_io(lock.clone(), Duration::from_millis(10), move || {
++            duplicate.store(true, Ordering::SeqCst);
++            Ok(())
++        })
++        .await;
++        assert!(result.unwrap_err().contains("did not respond"));
++        assert!(!duplicate_started.load(Ordering::SeqCst));
++
++        tokio::time::sleep(Duration::from_millis(90)).await;
++        assert!(first_finished.load(Ordering::SeqCst));
++
++        let retry_started = Arc::new(AtomicBool::new(false));
++        let retry = retry_started.clone();
++        run_session_store_io(lock, Duration::from_millis(100), move || {
++            retry.store(true, Ordering::SeqCst);
++            Ok(())
++        })
++        .await
++        .unwrap();
++        assert!(retry_started.load(Ordering::SeqCst));
++    }
++
++    #[tokio::test]
++    async fn loopback_callback_requires_the_bound_random_state() {
++        use axum::response::IntoResponse;
++
++        let (sender, mut receiver) = oneshot::channel();
++        let state = std::sync::Arc::new(tokio::sync::Mutex::new(CallbackState {
++            expected_state: "expected".to_owned(),
++            sender: Some(sender),
++        }));
++        let rejected = callback(
++            Query(CallbackQuery {
++                code: Some("code".to_owned()),
++                error: None,
++                state: Some("wrong".to_owned()),
++            }),
++            AxumState(state.clone()),
++        )
++        .await
++        .into_response();
++        assert_eq!(rejected.status(), StatusCode::BAD_REQUEST);
++        assert!(state.lock().await.sender.is_some());
++
++        let accepted = callback(
++            Query(CallbackQuery {
++                code: Some("one-time-code".to_owned()),
++                error: None,
++                state: Some("expected".to_owned()),
++            }),
++            AxumState(state),
++        )
++        .await
++        .into_response();
++        assert_eq!(accepted.status(), StatusCode::OK);
++        assert_eq!(receiver.try_recv().unwrap().unwrap(), "one-time-code");
++    }
++}
+diff --git a/desktop/src-tauri/src/persona_catalog.rs b/desktop/src-tauri/src/persona_catalog.rs
+index 927e538..503722c 100644
+--- a/desktop/src-tauri/src/persona_catalog.rs
++++ b/desktop/src-tauri/src/persona_catalog.rs
+@@ -70,13 +70,16 @@ struct CatalogAgentProjection {
+ /// response cannot populate the new community's query cache.
+ #[tauri::command]
+ pub(crate) async fn fetch_persona_catalog(
++    app: tauri::AppHandle,
+     state: State<'_, AppState>,
+     relay_client: State<'_, NativeRelayClient>,
+ ) -> Result<Vec<PersonaCatalogPublication>, String> {
+     let keys = state.signing_keys()?;
+     let owner = keys.public_key().to_hex();
+     let relay_url = crate::relay::relay_ws_url_with_override(&state);
+-    let session = relay_client.session(relay_url.clone(), keys).await;
++    let session = relay_client
++        .session(Some(app), relay_url.clone(), keys)
++        .await;
+     let mut by_id = HashMap::new();
+     let mut until = None;
+ 
+diff --git a/desktop/src-tauri/src/relay.rs b/desktop/src-tauri/src/relay.rs
+index e11c336..a995fc0 100644
+--- a/desktop/src-tauri/src/relay.rs
++++ b/desktop/src-tauri/src/relay.rs
+@@ -97,6 +97,34 @@ pub fn relay_http_base_url(relay_url: &str) -> String {
+     trimmed.to_string()
+ }
+ 
++pub(crate) fn relay_ws_url_from_http(http_url: &str) -> Option<String> {
++    let mut parsed = url::Url::parse(http_url).ok()?;
++    if !parsed.username().is_empty() || parsed.password().is_some() {
++        return None;
++    }
++    let relay_scheme = match parsed.scheme() {
++        "https" => "wss",
++        "http" => "ws",
++        _ => return None,
++    };
++    parsed.set_scheme(relay_scheme).ok()?;
++    Some(parsed.origin().ascii_serialization())
++}
++
++pub(crate) async fn nip_fi_header_for_keys(
++    state: &AppState,
++    http_url: &str,
++    keys: &Keys,
++) -> Result<Option<String>, String> {
++    if relay_ws_url_from_http(http_url).as_deref() == Some(crate::nip_fa::PLATFORM_RELAY) {
++        crate::nip_fa::assertion_for_keys(state, crate::nip_fa::PLATFORM_RELAY, keys)
++            .await
++            .map(Some)
++    } else {
++        Ok(None)
++    }
++}
++
+ mod scope;
+ pub use scope::{
+     assert_expected_relay_scope, assert_expected_signer, bind_expected_relay_scope,
+@@ -375,6 +403,8 @@ pub async fn query_relay_at(
+     let body_bytes =
+         serde_json::to_vec(filters).map_err(|e| format!("filter serialization failed: {e}"))?;
+     let auth = build_nip98_auth_header(&Method::POST, &url, &body_bytes, state)?;
++    let keys = state.signing_keys()?;
++    let identity = nip_fi_header_for_keys(state, &url, &keys).await?;
+     send_query_request(
+         &state.http_client,
+         &url,
+@@ -382,6 +412,7 @@ pub async fn query_relay_at(
+         None,
+         body_bytes,
+         QUERY_REQUEST_TIMEOUT,
++        identity.as_deref(),
+     )
+     .await
+ }
+@@ -398,6 +429,7 @@ pub async fn query_relay_at_with_keys(
+     let body_bytes =
+         serde_json::to_vec(filters).map_err(|e| format!("filter serialization failed: {e}"))?;
+     let auth = build_nip98_auth_header_for_keys(keys, &Method::POST, &url, &body_bytes)?;
++    let identity = nip_fi_header_for_keys(state, &url, keys).await?;
+     send_query_request(
+         &state.http_client,
+         &url,
+@@ -405,6 +437,7 @@ pub async fn query_relay_at_with_keys(
+         auth_tag,
+         body_bytes,
+         QUERY_REQUEST_TIMEOUT,
++        identity.as_deref(),
+     )
+     .await
+ }
+@@ -423,8 +456,12 @@ fn build_authenticated_relay_request(
+     body: Option<Vec<u8>>,
+     auth_tag: Option<&str>,
+     timeout: Option<std::time::Duration>,
++    identity: Option<&str>,
+ ) -> RequestBuilder {
+     let mut request = client.request(method, url).header("Authorization", auth);
++    if let Some(identity) = identity {
++        request = request.header("Nostr-Federated-Identity", format!("Bearer {identity}"));
++    }
+     if body.is_some() {
+         request = request.header("Content-Type", "application/json");
+     }
+@@ -455,6 +492,7 @@ async fn send_query_request(
+     auth_tag: Option<&str>,
+     body_bytes: Vec<u8>,
+     timeout: std::time::Duration,
++    identity: Option<&str>,
+ ) -> Result<Vec<nostr::Event>, String> {
+     let response = build_authenticated_relay_request(
+         http_client,
+@@ -464,6 +502,7 @@ async fn send_query_request(
+         Some(body_bytes),
+         auth_tag,
+         Some(timeout),
++        identity,
+     )
+     .send()
+     .await
+@@ -706,12 +745,16 @@ pub async fn submit_signed_event_with_keys(
+     let body_bytes = event.as_json().into_bytes();
+     crate::egress_guard::assert_no_key_backup_bytes(&body_bytes, "signed event submit (keys)")?;
+     let auth_header = build_nip98_auth_header_for_keys(keys, &Method::POST, &url, &body_bytes)?;
++    let identity = nip_fi_header_for_keys(state, &url, keys).await?;
+ 
+     let mut request = state
+         .http_client
+         .post(&url)
+         .header("Authorization", auth_header)
+         .header("Content-Type", "application/json");
++    if let Some(identity) = identity {
++        request = request.header("Nostr-Federated-Identity", format!("Bearer {identity}"));
++    }
+     if let Some(tag) = auth_tag {
+         request = request.header("x-auth-tag", tag);
+     }
+diff --git a/desktop/src-tauri/src/relay/get.rs b/desktop/src-tauri/src/relay/get.rs
+index 95226d3..9d3ab67 100644
+--- a/desktop/src-tauri/src/relay/get.rs
++++ b/desktop/src-tauri/src/relay/get.rs
+@@ -23,6 +23,8 @@ pub async fn get_relay_json<T: DeserializeOwned>(
+         path_with_query
+     );
+     let auth = build_nip98_auth_header(&Method::GET, &url, &[], state)?;
++    let keys = state.signing_keys()?;
++    let identity = super::nip_fi_header_for_keys(state, &url, &keys).await?;
+     let response = build_authenticated_relay_request(
+         &state.http_client,
+         Method::GET,
+@@ -31,6 +33,7 @@ pub async fn get_relay_json<T: DeserializeOwned>(
+         None,
+         None,
+         None,
++        identity.as_deref(),
+     )
+     .send()
+     .await
+diff --git a/desktop/src-tauri/src/relay/profile_avatar.rs b/desktop/src-tauri/src/relay/profile_avatar.rs
+index 7d62401..45db2aa 100644
+--- a/desktop/src-tauri/src/relay/profile_avatar.rs
++++ b/desktop/src-tauri/src/relay/profile_avatar.rs
+@@ -106,11 +106,15 @@ pub(crate) async fn localize_avatar(
+     // unavailable source community must not break restart/reconciliation.
+     let localized = target.join(source.path()).map_err(|e| e.to_string())?;
+     let target_auth = sign_blossom_get_auth_header(keys, target.as_str(), 60)?;
++    let target_identity = super::nip_fi_header_for_keys(state, localized.as_str(), keys).await?;
+     let mut probe = state
+         .media_fetch_client
+         .head(localized.clone())
+         .timeout(TIMEOUT)
+         .header("Authorization", target_auth);
++    if let Some(identity) = target_identity {
++        probe = probe.header("Nostr-Federated-Identity", format!("Bearer {identity}"));
++    }
+     if let Some(tag) = auth_tag {
+         probe = probe.header("x-auth-tag", tag);
+     }
+@@ -138,11 +142,15 @@ pub(crate) async fn localize_avatar(
+         );
+     }
+     let auth = sign_blossom_get_auth_header(keys, source_base.as_str(), 60)?;
++    let source_identity = super::nip_fi_header_for_keys(state, source.as_str(), keys).await?;
+     let mut request = state
+         .media_fetch_client
+         .get(source.clone())
+         .timeout(TIMEOUT)
+         .header("Authorization", auth);
++    if let Some(identity) = source_identity {
++        request = request.header("Nostr-Federated-Identity", format!("Bearer {identity}"));
++    }
+     if let Some(tag) = auth_tag {
+         request = request.header("x-auth-tag", tag);
+     }
+@@ -169,6 +177,7 @@ pub(crate) async fn localize_avatar(
+     let mut response = None;
+     for path in ["upload", "media/upload"] {
+         let url = target.join(path).map_err(|e| e.to_string())?;
++        let identity = super::nip_fi_header_for_keys(state, url.as_str(), keys).await?;
+         let mut request = state
+             .media_fetch_client
+             .put(url)
+@@ -177,6 +186,9 @@ pub(crate) async fn localize_avatar(
+             .header("Content-Type", &mime)
+             .header("X-SHA-256", hash)
+             .body(body.clone());
++        if let Some(identity) = identity {
++            request = request.header("Nostr-Federated-Identity", format!("Bearer {identity}"));
++        }
+         if let Some(tag) = auth_tag {
+             request = request.header("x-auth-tag", tag);
+         }
+@@ -224,6 +236,7 @@ async fn existing_projection(
+     .map_err(|e| e.to_string())?;
+     let auth =
+         super::build_nip98_auth_header_for_keys(keys, &reqwest::Method::POST, url.as_str(), &body)?;
++    let identity = super::nip_fi_header_for_keys(state, url.as_str(), keys).await?;
+     let response = super::build_authenticated_relay_request(
+         &state.media_fetch_client,
+         reqwest::Method::POST,
+@@ -232,6 +245,7 @@ async fn existing_projection(
+         Some(body),
+         auth_tag,
+         Some(TIMEOUT),
++        identity.as_deref(),
+     )
+     .send()
+     .await
+diff --git a/desktop/src-tauri/src/relay/submit.rs b/desktop/src-tauri/src/relay/submit.rs
+index a6b79a6..9ab2e15 100644
+--- a/desktop/src-tauri/src/relay/submit.rs
++++ b/desktop/src-tauri/src/relay/submit.rs
+@@ -27,6 +27,7 @@ pub async fn submit_signed_event_at_with_keys(
+     let body_bytes = event.as_json().into_bytes();
+     crate::egress_guard::assert_no_key_backup_bytes(&body_bytes, "relay event submit")?;
+     let auth_header = build_nip98_auth_header_for_keys(keys, &Method::POST, &url, &body_bytes)?;
++    let identity = nip_fi_header_for_keys(state, &url, keys).await?;
+ 
+     let response = build_authenticated_relay_request(
+         &state.http_client,
+@@ -36,6 +37,7 @@ pub async fn submit_signed_event_at_with_keys(
+         Some(body_bytes),
+         None,
+         None,
++        identity.as_deref(),
+     )
+     .send()
+     .await
+diff --git a/desktop/src-tauri/src/relay/tests.rs b/desktop/src-tauri/src/relay/tests.rs
+index 251845e..c212d8a 100644
+--- a/desktop/src-tauri/src/relay/tests.rs
++++ b/desktop/src-tauri/src/relay/tests.rs
+@@ -4,7 +4,7 @@
+ use super::{
+     build_authenticated_relay_request, build_profile_event, classify_intercepted_response,
+     effective_agent_relay_url, extract_retry_in_hint, parse_command_response, relay_http_base_url,
+-    MALFORMED_RESPONSE_MESSAGE,
++    relay_ws_url_from_http, MALFORMED_RESPONSE_MESSAGE,
+ };
+ use serde::Deserialize;
+ 
+@@ -53,6 +53,7 @@ fn authenticated_get_request_matches_existing_shape() {
+         None,
+         None,
+         None,
++        None,
+     )
+     .build()
+     .expect("request should build");
+@@ -79,6 +80,7 @@ fn authenticated_json_post_request_preserves_final_body_bytes() {
+         Some(body.clone()),
+         None,
+         None,
++        None,
+     )
+     .build()
+     .expect("request should build");
+@@ -112,6 +114,7 @@ fn authenticated_json_post_request_keeps_auth_tag_when_present() {
+         Some(body.clone()),
+         Some("owner-auth-tag"),
+         None,
++        None,
+     )
+     .build()
+     .expect("request should build");
+@@ -142,6 +145,7 @@ fn authenticated_query_request_preserves_timeout() {
+         Some(b"[]".to_vec()),
+         None,
+         Some(timeout),
++        None,
+     )
+     .build()
+     .expect("request should build");
+@@ -159,6 +163,53 @@ fn authenticated_query_request_preserves_timeout() {
+     assert_eq!(request_body_bytes(&request), Some(&b"[]"[..]));
+ }
+ 
++#[test]
++fn authenticated_request_attaches_separate_nip_fi_header() {
++    let client = reqwest::Client::new();
++    let request = build_authenticated_relay_request(
++        &client,
++        reqwest::Method::POST,
++        "https://relay.example/events",
++        "Nostr signed-event",
++        Some(b"{}".to_vec()),
++        None,
++        None,
++        Some("compact.jwt.signature"),
++    )
++    .build()
++    .expect("request should build");
++    assert_eq!(request.headers()["authorization"], "Nostr signed-event");
++    assert_eq!(
++        request.headers()["nostr-federated-identity"],
++        "Bearer compact.jwt.signature"
++    );
++}
++
++#[test]
++fn relay_origin_recognition_ignores_http_endpoint_paths_but_keeps_authority() {
++    let base = crate::nip_fa::RELAY_HTTP_ORIGIN;
++    assert_eq!(
++        relay_ws_url_from_http(&format!("{base}/query")),
++        Some(crate::nip_fa::PLATFORM_RELAY.to_owned())
++    );
++    assert_eq!(
++        relay_ws_url_from_http(&format!("{base}/events?x=1")),
++        Some(crate::nip_fa::PLATFORM_RELAY.to_owned())
++    );
++    let mut alternate_port = url::Url::parse(base).unwrap();
++    alternate_port.set_port(Some(8443)).unwrap();
++    assert_ne!(
++        relay_ws_url_from_http(&format!("{alternate_port}/events")),
++        Some(crate::nip_fa::PLATFORM_RELAY.to_owned())
++    );
++    let mut with_user = url::Url::parse(base).unwrap();
++    with_user.set_username("user").unwrap();
++    assert_eq!(
++        relay_ws_url_from_http(&format!("{with_user}/events")),
++        None
++    );
++}
++
+ #[test]
+ fn extracts_hint_from_429_body() {
+     assert_eq!(
+@@ -446,6 +492,7 @@ async fn stalled_query_request_times_out_with_classified_error() {
+             None,
+             b"[]".to_vec(),
+             Duration::from_millis(200),
++            None,
+         ),
+     )
+     .await
+@@ -506,6 +553,7 @@ async fn stalled_response_body_times_out_with_classified_error() {
+             None,
+             b"[]".to_vec(),
+             Duration::from_millis(200),
++            None,
+         ),
+     )
+     .await
+@@ -567,6 +615,7 @@ async fn stalled_error_response_body_times_out_with_classified_error() {
+             None,
+             b"[]".to_vec(),
+             Duration::from_millis(200),
++            None,
+         ),
+     )
+     .await
+@@ -624,6 +673,7 @@ async fn non_stalled_error_response_yields_status_message() {
+             None,
+             b"[]".to_vec(),
+             Duration::from_millis(200),
++            None,
+         ),
+     )
+     .await
+diff --git a/desktop/src-tauri/src/team_catalog.rs b/desktop/src-tauri/src/team_catalog.rs
+index 82b7685..c91f035 100644
+--- a/desktop/src-tauri/src/team_catalog.rs
++++ b/desktop/src-tauri/src/team_catalog.rs
+@@ -61,13 +61,16 @@ struct TeamCatalogMemberProjection {
+ /// response cannot populate the new community's query cache.
+ #[tauri::command]
+ pub(crate) async fn fetch_team_catalog(
++    app: tauri::AppHandle,
+     state: State<'_, AppState>,
+     relay_client: State<'_, NativeRelayClient>,
+ ) -> Result<Vec<TeamCatalogPublication>, String> {
+     let keys = state.signing_keys()?;
+     let owner = keys.public_key().to_hex();
+     let relay_url = crate::relay::relay_ws_url_with_override(&state);
+-    let session = relay_client.session(relay_url.clone(), keys).await;
++    let session = relay_client
++        .session(Some(app), relay_url.clone(), keys)
++        .await;
+     let by_id = collect_verified_catalog(|until| {
+         let session = &session;
+         async move {
+diff --git a/desktop/src-tauri/src/unread_catch_up.rs b/desktop/src-tauri/src/unread_catch_up.rs
+index d0e2de8..46458ab 100644
+--- a/desktop/src-tauri/src/unread_catch_up.rs
++++ b/desktop/src-tauri/src/unread_catch_up.rs
+@@ -151,7 +151,9 @@ pub(crate) async fn unread_catch_up(
+     // would then be reading a cancelled socket. The `join_next` drain ends
+     // before this binding does, so that holds today — keep it that way, and in
+     // particular do not move the lease into a task or narrow its scope.
+-    let session = relay_client.session(relay_url.clone(), keys).await;
++    let session = relay_client
++        .session(Some(app.clone()), relay_url.clone(), keys)
++        .await;
+ 
+     let (fetched, failures) = fetch_channels(session.handle(), &request).await?;
+ 
+diff --git a/desktop/src/features/settings/ui/ProfileSettingsCard.tsx b/desktop/src/features/settings/ui/ProfileSettingsCard.tsx
+index b2aa03c..ce6f1fb 100644
+--- a/desktop/src/features/settings/ui/ProfileSettingsCard.tsx
++++ b/desktop/src/features/settings/ui/ProfileSettingsCard.tsx
+@@ -29,6 +29,7 @@ import {
+ } from "./SettingsOptionGroup";
+ import { SettingsSectionHeader } from "./SettingsSectionHeader";
+ import { SignOutSection } from "./SignOutSection";
++import { PlatformSignInSection } from "./PlatformSignInSection";
+ import { writeTextToClipboard } from "@/shared/lib/clipboard";
+ import { canonicalNpub, UNAVAILABLE_KEY_LABEL } from "@/shared/lib/pubkey";
+ 
+@@ -862,6 +863,7 @@ export function ProfileSettingsCard({
+         </div>
+       </div>
+ 
++      <PlatformSignInSection />
+       <SignOutSection />
+     </section>
+   );
+diff --git a/desktop/src/shared/api/tauriIdentity.ts b/desktop/src/shared/api/tauriIdentity.ts
+index 161f25c..11952fd 100644
+--- a/desktop/src/shared/api/tauriIdentity.ts
++++ b/desktop/src/shared/api/tauriIdentity.ts
+@@ -1,3 +1,5 @@
++import { Channel } from "@tauri-apps/api/core";
++
+ import { invokeTauri } from "@/shared/api/tauri";
+ import type { Identity, IdentityStorage } from "@/shared/api/types";
+ 
+@@ -55,6 +57,26 @@ export async function signOut(): Promise<void> {
+   await invokeTauri("sign_out");
+ }
+ 
++export async function signInToPlatform(
++  onHandoffUrl: (url: string) => void,
++): Promise<string> {
++  const handoffUrl = new Channel<string>(onHandoffUrl);
++  return invokeTauri<string>("nip_fa_login", { onHandoffUrl: handoffUrl });
++}
++
++export type PlatformLogoutOutcome =
++  | "grants_revoked"
++  | "session_already_invalid"
++  | "no_local_session";
++
++export async function cancelPlatformSignIn(): Promise<void> {
++  await invokeTauri("nip_fa_cancel_login");
++}
++
++export async function signOutOfPlatform(): Promise<PlatformLogoutOutcome> {
++  return invokeTauri<PlatformLogoutOutcome>("nip_fa_logout");
++}
++
+ export type GeneratePassphraseOptions = {
+   /** Word count; Rust clamps to its allowed range (currently 3–10). */
+   words?: number;
+--- /dev/null
++++ b/desktop/src/features/settings/ui/PlatformSignInSection.tsx
+@@ -0,0 +1,158 @@
++import { isTauri } from "@tauri-apps/api/core";
++import { Copy } from "lucide-react";
++import * as React from "react";
++import { toast } from "sonner";
++
++import {
++  cancelPlatformSignIn,
++  signInToPlatform,
++  signOutOfPlatform,
++} from "@/shared/api/tauriIdentity";
++import { writeTextToClipboard } from "@/shared/lib/clipboard";
++import { Button } from "@/shared/ui/button";
++import { Input } from "@/shared/ui/input";
++import { Spinner } from "@/shared/ui/spinner";
++import { SettingsOptionGroup, SettingsOptionRow } from "./SettingsOptionGroup";
++
++export function PlatformSignInSection() {
++  const [busy, setBusy] = React.useState(false);
++  const [handoffUrl, setHandoffUrl] = React.useState<string | null>(null);
++  const [status, setStatus] = React.useState<string | null>(null);
++
++  React.useEffect(
++    () => () => {
++      void cancelPlatformSignIn().catch(() => {});
++    },
++    [],
++  );
++
++  if (!isTauri()) return null;
++
++  const signIn = async () => {
++    setBusy(true);
++    setHandoffUrl(null);
++    setStatus("Waiting for platform sign-in…");
++    try {
++      const email = await signInToPlatform(setHandoffUrl);
++      setHandoffUrl(null);
++      setStatus(`Signed in to platform as ${email}.`);
++      toast.success(`Signed in to platform as ${email}`);
++    } catch (error) {
++      const message =
++        error instanceof Error ? error.message : "platform sign-in failed";
++      setStatus(message);
++      toast.error(message);
++    } finally {
++      setBusy(false);
++    }
++  };
++
++  const signOut = async () => {
++    setBusy(true);
++    setHandoffUrl(null);
++    try {
++      const outcome = await signOutOfPlatform();
++      const message =
++        outcome === "grants_revoked"
++          ? "Signed out of platform and revoked this account’s owned agent grants. Your Buzz key and local data are unchanged."
++          : outcome === "session_already_invalid"
++            ? "The platform session was already expired or revoked. The local session was cleared; this sign-out did not revoke additional grants."
++            : "No local platform session was present, so no grant revocation was attempted.";
++      setStatus(message);
++      toast.success(message);
++    } catch (error) {
++      const message =
++        error instanceof Error ? error.message : "platform sign-out failed";
++      setStatus(`platform sign-out could not be completed. ${message}`);
++      toast.error(message);
++    } finally {
++      setBusy(false);
++    }
++  };
++
++  return (
++    <SettingsOptionGroup
++      data-testid="platform-sign-in-section"
++      description="Connect this desktop to the configured identity service."
++      title="platform sign-in"
++    >
++      <SettingsOptionRow className="items-start">
++        <div className="min-w-0 flex-1 space-y-2">
++          <p className="text-sm text-muted-foreground">
++            If platform is using the wrong Google account, sign out here, then sign
++            in again and open the short-lived link in the Google account you
++            want to use. Signing out revokes agent grants owned by that account;
++            it does not remove your Buzz key or local Buzz data.
++          </p>
++          {status ? (
++            <p
++              aria-live="polite"
++              className="text-sm text-muted-foreground"
++              data-testid="platform-sign-in-status"
++            >
++              {status}
++            </p>
++          ) : null}
++          {handoffUrl ? (
++            <div className="space-y-2" data-testid="platform-handoff-link">
++              <label
++                className="text-xs font-medium text-muted-foreground"
++                htmlFor="platform-handoff-url"
++              >
++                Open this temporary sign-in link in the approved browser profile
++              </label>
++              <div className="flex min-w-0 gap-2">
++                <Input
++                  className="min-w-0 flex-1 font-mono text-xs"
++                  id="platform-handoff-url"
++                  readOnly
++                  value={handoffUrl}
++                />
++                <Button
++                  aria-label="Copy platform sign-in link"
++                  onClick={async () => {
++                    try {
++                      await writeTextToClipboard(handoffUrl);
++                      toast.success("platform sign-in link copied");
++                    } catch (error) {
++                      toast.error(
++                        error instanceof Error
++                          ? error.message
++                          : "Could not copy platform sign-in link",
++                      );
++                    }
++                  }}
++                  size="sm"
++                  type="button"
++                  variant="secondary"
++                >
++                  <Copy aria-hidden="true" className="h-4 w-4" />
++                  Copy
++                </Button>
++              </div>
++            </div>
++          ) : null}
++        </div>
++        <div className="flex shrink-0 flex-wrap gap-2">
++          <Button disabled={busy} onClick={() => void signIn()} type="button">
++            {busy ? (
++              <Spinner
++                aria-label="platform sign-in pending"
++                className="h-4 w-4 border-2"
++              />
++            ) : null}
++            Check or sign in
++          </Button>
++          <Button
++            disabled={busy}
++            onClick={() => void signOut()}
++            type="button"
++            variant="outline"
++          >
++            Sign out and revoke grants
++          </Button>
++        </div>
++      </SettingsOptionRow>
++    </SettingsOptionGroup>
++  );
++}

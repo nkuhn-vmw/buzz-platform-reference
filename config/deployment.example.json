@@ -1,0 +1,32 @@
+{
+  "api": "https://api.sys.example.invalid",
+  "org": "buzz-reference",
+  "space": "pilot",
+  "domain": "apps.example.invalid",
+  "routePrefix": "buzz-demo",
+  "stack": "cflinuxfs4",
+  "agentStack": "cflinuxfs4",
+  "model": "YOUR_CHAT_MODEL_ID",
+  "oidcIssuer": "https://YOUR_SSO_ZONE.uaa.sys.example.invalid/oauth/token",
+  "identityProvider": "YOUR_IDENTITY_PROVIDER",
+  "allowedEmails": ["teammate@example.invalid"],
+  "agents": {
+    "helper": {"displayName":"Platform Helper","runtime":"tanzu","respondTo":"owner-only"},
+    "researcher": {"displayName":"Buzz Researcher","runtime":"builtin","respondTo":"owner-only"}
+  },
+  "desktop": {
+    "name": "Buzz Reference Pilot",
+    "bundleId": "org.example.buzz.reference",
+    "profile": "reference-pilot"
+  },
+  "services": {
+    "postgres": {"offering":"postgres","plan":"YOUR_POSTGRES_PLAN"},
+    "cache": {"offering":"p.redis","plan":"YOUR_LUA_ENABLED_PLAN"},
+    "objects": {"offering":"seaweedfs","plan":"YOUR_S3_PLAN"},
+    "ai": {"offering":"ai-models","plan":"YOUR_MODEL_PLAN"},
+    "sso": {"offering":"p-identity","plan":"YOUR_SSO_PLAN"},
+    "gateway": {"offering":"mcp-gateway","plan":"YOUR_GATEWAY_PLAN"},
+    "credentials": {"offering":"credential-store","plan":"YOUR_CREDENTIAL_STORE_PLAN"},
+    "secrets": {"offering":"credhub","plan":"default"}
+  }
+}

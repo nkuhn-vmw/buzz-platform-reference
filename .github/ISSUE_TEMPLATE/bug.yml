@@ -1,0 +1,21 @@
+name: Deployment or usage problem
+description: Report a reproducible issue without private environment details.
+body:
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Expected and observed behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps and versions
+      description: Include the reference commit, desktop version, CF CLI and relevant buildpack/service versions.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized evidence
+      description: Remove secrets, email addresses, foundation URLs, keys, session codes and raw VCAP data. Report security vulnerabilities privately as described in SECURITY.md.

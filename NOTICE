@@ -1,0 +1,12 @@
+Buzz Platform Reference
+Copyright 2026 Buzz Platform Reference contributors.
+
+This reference includes integration patches and configuration for Buzz,
+Copyright Block, Inc. and contributors, licensed under Apache License 2.0.
+Pinned source: https://github.com/block/buzz/tree/5d70622ac0b1b7bf940803cc8f912f0e82a4c946
+The upstream license is preserved in integrations/Buzz-LICENSE and all packaged binaries.
+
+Tanzu, Cloud Foundry, Buzz and OpenCode names identify their respective projects
+or products. This repository is a community reference, not a vendor support
+commitment or an official Block distribution. Tanzu services and buildpacks
+are supplied by the operator's licensed platform, not redistributed here.

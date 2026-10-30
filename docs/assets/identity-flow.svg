@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 960" role="img" aria-labelledby="title desc">
+  <title id="title">Human sign-in and Buzz relay identity</title>
+  <desc id="desc">A local Buzz desktop starts OIDC sign-in through the identity adapter, authenticates with the bound platform SSO service, receives a one-time loopback handoff code, exchanges it for a local session, then obtains a short-lived NIP-FI assertion. The relay verifies the assertion using JWKS fetched over pinned Cloud Foundry mutual TLS on port 8443.</desc>
+  <defs>
+    <marker id="arrow-cyan" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#4DD8E5"/></marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#B59AFF"/></marker>
+    <marker id="arrow-teal" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#48D7B0"/></marker>
+    <style>
+      .bg{fill:#0b1020}.card{fill:#101a2c;stroke:#33435d;stroke-width:2}.desktop{stroke:#4dd8e5}.id{stroke:#b59aff}.sso{stroke:#8391a7}.relay{stroke:#48d7b0}.title{font:700 32px system-ui,sans-serif;fill:#f1f5fb}.sub{font:600 16px system-ui,sans-serif;letter-spacing:1px;fill:#9eabc2}.head{font:700 20px system-ui,sans-serif;fill:#f1f5fb}.body{font:16px system-ui,sans-serif;fill:#c1cce0}.small{font:14px system-ui,sans-serif;fill:#9eabc2}.cyan{stroke:#4dd8e5;stroke-width:3;fill:none;marker-end:url(#arrow-cyan)}.purple{stroke:#b59aff;stroke-width:3;fill:none;marker-end:url(#arrow-purple)}.teal{stroke:#48d7b0;stroke-width:3;fill:none;marker-end:url(#arrow-teal)}.dashed{stroke-dasharray:8 7}.label{font:600 14px system-ui,sans-serif;fill:#d7e0ef}.num{fill:#4dd8e5}.numText{font:700 15px system-ui,sans-serif;fill:#0b1020}
+    </style>
+  </defs>
+  <rect class="bg" width="1500" height="960" rx="24"/>
+  <text class="title" x="52" y="62">Human sign-in → relay identity</text>
+  <text class="sub" x="52" y="98">BROWSER OIDC HANDOFF · LOCAL SESSION · SHORT-LIVED ASSERTION</text>
+
+  <rect class="card desktop" x="54" y="148" width="300" height="174" rx="18"/>
+  <text class="head" x="80" y="187">Buzz desktop</text>
+  <text class="body" x="80" y="220">Local keypair + OS credential store</text>
+  <text class="body" x="80" y="248">Loopback callback listener</text>
+  <text class="small" x="80" y="284">State · PKCE handoff secret</text>
+
+  <rect class="card id" x="432" y="148" width="324" height="174" rx="18"/>
+  <text class="head" x="458" y="187">Identity adapter</text>
+  <text class="body" x="458" y="220">OIDC callback + verified email</text>
+  <text class="body" x="458" y="248">Exact operator allowlist</text>
+  <text class="small" x="458" y="284">One-time code · bounded session</text>
+
+  <rect class="card sso" x="834" y="148" width="252" height="174" rx="18"/>
+  <text class="head" x="860" y="187">Platform SSO</text>
+  <text class="body" x="860" y="220">Bound OIDC service</text>
+  <text class="body" x="860" y="248">User authentication</text>
+  <text class="small" x="860" y="284">Issuer · subject · claims</text>
+
+  <rect class="card relay" x="1160" y="148" width="286" height="174" rx="18"/>
+  <text class="head" x="1186" y="187">Buzz relay</text>
+  <text class="body" x="1186" y="220">FI issuer/audience checks</text>
+  <text class="body" x="1186" y="248">Event signature + channel auth</text>
+  <text class="small" x="1186" y="284">JWKS via internal mTLS path</text>
+
+  <!-- Browser OIDC round trip -->
+  <path class="purple" d="M354 189 H420"/>
+  <text class="label" x="358" y="136">1 · open /login/start</text>
+  <path class="purple" d="M756 189 H822"/>
+  <text class="label" x="758" y="136">2 · OIDC redirect</text>
+  <path class="purple dashed" d="M834 306 H768"/>
+  <text class="label" x="768" y="344">3 · authenticated callback</text>
+  <path class="cyan" d="M432 306 H366"/>
+  <text class="label" x="360" y="344">4 · one-time code to loopback</text>
+
+  <line x1="54" y1="366" x2="1446" y2="366" stroke="#26364d" stroke-width="2"/>
+  <text class="sub" x="54" y="403">CODE HANDOFF AND IDENTITY ASSERTION</text>
+
+  <circle class="num" cx="78" cy="458" r="15"/><text class="numText" x="73" y="464">5</text>
+  <text class="head" x="110" y="456">Desktop exchanges code</text>
+  <text class="body" x="110" y="485">Sends handoff secret to identity adapter.</text>
+  <text class="small" x="110" y="512">Adapter consumes code once and returns session expiry.</text>
+
+  <circle class="num" cx="558" cy="458" r="15"/><text class="numText" x="553" y="464">6</text>
+  <text class="head" x="590" y="456">Desktop proves its Buzz key</text>
+  <text class="body" x="590" y="485">NIP-98 request binds signed proof to the session.</text>
+  <text class="small" x="590" y="512">Identity adapter binds SSO principal to that public key.</text>
+
+  <circle class="num" cx="1068" cy="458" r="15"/><text class="numText" x="1063" y="464">7</text>
+  <text class="head" x="1100" y="456">Identity signs assertion</text>
+  <text class="body" x="1100" y="485">Short-lived NIP-FI assertion names key + audience.</text>
+  <text class="small" x="1100" y="512">Desktop stores session in OS credential store.</text>
+
+  <rect x="54" y="570" width="1392" height="282" rx="20" fill="#0f192b" stroke="#384a63" stroke-width="2"/>
+  <text class="sub" x="82" y="610">SEPARATE RELAY TRUST CHECK</text>
+
+  <rect class="card id" x="102" y="654" width="378" height="134" rx="16"/>
+  <text class="head" x="128" y="693">Identity JWKS listener</text>
+  <text class="body" x="128" y="725">HTTPS mutual TLS · port 8443</text>
+  <text class="small" x="128" y="756">Accepts the pinned relay app GUID</text>
+
+  <rect class="card relay" x="1020" y="654" width="378" height="134" rx="16"/>
+  <text class="head" x="1046" y="693">Relay JWKS proxy + verifier</text>
+  <text class="body" x="1046" y="725">CF instance identity client certificate</text>
+  <text class="small" x="1046" y="756">Checks expected identity app GUID</text>
+
+  <path class="teal" d="M480 696 H1006"/>
+  <text class="label" x="590" y="678">8 · key fetch over pinned CF app identity</text>
+  <path class="teal" d="M480 755 H1006"/>
+  <text class="label" x="606" y="779">JWKS response · public keys only</text>
+
+  <text class="small" x="54" y="550">9 · After sign-in, the desktop presents its assertion and signed events over the relay connection.</text>
+
+  <text class="small" x="54" y="908">NIP-FI proves the admitted key identity; relay membership and channel permissions remain separate checks.</text>
+</svg>

@@ -1,0 +1,13 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+  - package-ecosystem: npm
+    directories: ['/apps/identity', '/apps/agent', '/apps/pilot-mcp', '/integrations/agent', '/integrations/cf-mtls']
+    schedule:
+      interval: monthly
+    groups:
+      dependencies:
+        patterns: ['*']

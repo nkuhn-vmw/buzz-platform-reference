@@ -1,0 +1,3 @@
+# Generated per deployment by scripts/render.mjs.
+# Run node scripts/deploy.mjs prepare-apps, then node scripts/render.mjs.
+# Deploy .state/manifests/relay.yml; never put real routes or app GUIDs here.

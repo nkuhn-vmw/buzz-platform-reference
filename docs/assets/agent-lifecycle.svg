@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 980" role="img" aria-labelledby="title desc">
+  <title id="title">Hosted Buzz agent task lifecycle</title>
+  <desc id="desc">A Cloud Foundry Task validates an owner grant deadline, obtains a dedicated PostgreSQL advisory lease keyed to the agent, and starts Buzz ACP. The worker database credentials remain with the supervisor; the agent identity and grant are passed to Buzz ACP for relay authentication. Grant expiry, lease failure, or task termination sends SIGTERM and then SIGKILL after two seconds. The lease remains held until the child exits. Relay messages are durable; local files and model sessions are ephemeral.</desc>
+  <defs>
+    <marker id="arrow-teal" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#48D7B0"/></marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#B59AFF"/></marker>
+    <marker id="arrow-red" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#FF8C9B"/></marker>
+    <style>
+      .bg{fill:#0b1020}.card{fill:#101a2c;stroke:#33435d;stroke-width:2}.task{stroke:#48d7b0}.grant{stroke:#b59aff}.warn{stroke:#ff8c9b}.db{stroke:#4dd8e5}.title{font:700 32px system-ui,sans-serif;fill:#f1f5fb}.sub{font:600 16px system-ui,sans-serif;letter-spacing:1.2px;fill:#9eabc2}.head{font:700 20px system-ui,sans-serif;fill:#f1f5fb}.body{font:16px system-ui,sans-serif;fill:#c1cce0}.small{font:14px system-ui,sans-serif;fill:#9eabc2}.teal{stroke:#48d7b0;stroke-width:3;fill:none;marker-end:url(#arrow-teal)}.purple{stroke:#b59aff;stroke-width:3;fill:none;marker-end:url(#arrow-purple)}.red{stroke:#ff8c9b;stroke-width:3;fill:none;marker-end:url(#arrow-red)}.line{stroke:#60718a;stroke-width:2;fill:none;stroke-dasharray:7 6}.label{font:600 14px system-ui,sans-serif;fill:#d7e0ef}.chip{font:700 13px system-ui,sans-serif;fill:#0b1020}
+    </style>
+  </defs>
+  <rect class="bg" width="1500" height="980" rx="24"/>
+  <text class="title" x="52" y="62">Agent task lifecycle</text>
+  <text class="sub" x="52" y="98">OWNER GRANT DEADLINE · PER-AGENT POSTGRESQL LEASE · FAIL-STOP CHILD</text>
+
+  <rect class="card task" x="56" y="154" width="270" height="186" rx="18"/>
+  <text class="head" x="82" y="194">1 · CF Task starts</text>
+  <text class="body" x="82" y="228">Reject web-instance mode</text>
+  <text class="body" x="82" y="256">Read bound agent identity</text>
+  <text class="body" x="82" y="284">Require future grant expiry</text>
+  <text class="small" x="82" y="316">Key · owner · grant · deadline</text>
+
+  <rect class="card grant" x="394" y="154" width="270" height="186" rx="18"/>
+  <text class="head" x="420" y="194">2 · Validate grant</text>
+  <text class="body" x="420" y="228">Grant must still be active</text>
+  <text class="body" x="420" y="256">Identity binding is required</text>
+  <text class="body" x="420" y="284">No secret to stdout/logs</text>
+  <text class="small" x="420" y="316">Missing or expired → refuse</text>
+
+  <rect class="card db" x="732" y="154" width="294" height="186" rx="18"/>
+  <text class="head" x="758" y="194">3 · Acquire agent lease</text>
+  <text class="body" x="758" y="228">Dedicated PostgreSQL service</text>
+  <text class="body" x="758" y="256">Session advisory lock per agent</text>
+  <text class="body" x="758" y="284">Direct, non-pooling connection</text>
+  <text class="small" x="758" y="316">Already held → refuse duplicate</text>
+
+  <rect class="card task" x="1094" y="154" width="350" height="186" rx="18"/>
+  <text class="head" x="1120" y="194">4 · Start Buzz ACP</text>
+  <text class="body" x="1120" y="228">Agent key + grant passed to child</text>
+  <text class="body" x="1120" y="256">DB URL + VCAP removed from child env</text>
+  <text class="body" x="1120" y="284">ACP ↔ relay and runtime adapter</text>
+  <text class="small" x="1120" y="316">Local home/workspace under /tmp</text>
+
+  <path class="teal" d="M326 247 H382"/>
+  <path class="teal" d="M664 247 H720"/>
+  <path class="teal" d="M1026 247 H1082"/>
+  <text class="label" x="333" y="229">valid</text>
+  <text class="label" x="672" y="229">valid</text>
+  <text class="label" x="1033" y="229">held</text>
+
+  <rect x="56" y="404" width="878" height="196" rx="18" fill="#0f192b" stroke="#384a63" stroke-width="2"/>
+  <text class="sub" x="82" y="442">WHILE RUNNING</text>
+  <rect class="card task" x="82" y="468" width="365" height="100" rx="14"/>
+  <text class="head" x="104" y="505">ACP child handles admitted work</text>
+  <text class="body" x="104" y="536">Selected model + bound MCP tools</text>
+  <rect class="card db" x="510" y="468" width="384" height="100" rx="14"/>
+  <text class="head" x="532" y="505">Supervisor holds the DB session</text>
+  <text class="body" x="532" y="536">Heartbeat every 3 s · 10 s failure bound</text>
+  <path class="line" d="M447 518 H498"/>
+  <text class="small" x="452" y="501">child only</text>
+
+  <rect x="970" y="404" width="474" height="196" rx="18" fill="#201725" stroke="#6b3542" stroke-width="2"/>
+  <text class="sub" x="996" y="442">STOP CONDITIONS</text>
+  <text class="body" x="996" y="480">• owner grant deadline reached</text>
+  <text class="body" x="996" y="510">• PostgreSQL lease heartbeat lost</text>
+  <text class="body" x="996" y="540">• CF Task termination signal</text>
+  <text class="small" x="996" y="573">Each requests child shutdown</text>
+
+  <path class="red" d="M1268 340 V386"/>
+  <text class="label" x="1280" y="372">grant / task stop</text>
+  <path class="red" d="M890 340 C890 382 1070 382 1070 398"/>
+  <text class="label" x="922" y="374">lost connection</text>
+
+  <rect class="card warn" x="970" y="654" width="474" height="132" rx="18"/>
+  <text class="head" x="996" y="694">5 · Terminate child process group</text>
+  <text class="body" x="996" y="726">SIGTERM → wait 2 seconds → SIGKILL if needed</text>
+  <text class="small" x="996" y="758">Keep lease until child has exited</text>
+  <path class="red" d="M1207 600 V640"/>
+
+  <rect class="card db" x="510" y="654" width="384" height="132" rx="18"/>
+  <text class="head" x="536" y="694">6 · Release advisory lease</text>
+  <text class="body" x="536" y="726">After child exit; close DB session</text>
+  <text class="small" x="536" y="758">Replacement task may now acquire it</text>
+  <path class="teal" d="M970 721 H910"/>
+
+  <rect x="56" y="654" width="390" height="132" rx="18" fill="#102522" stroke="#48d7b0" stroke-width="2"/>
+  <text class="head" x="82" y="694">Durable relay record</text>
+  <text class="body" x="82" y="726">Messages and replies in relay PostgreSQL</text>
+  <text class="small" x="82" y="758">Survives worker restart</text>
+  <path class="line" d="M260 600 V642"/>
+
+  <rect x="56" y="828" width="1388" height="92" rx="16" fill="#17162a" stroke="#625487" stroke-width="2"/>
+  <text class="head" x="82" y="866">Ephemeral task state</text>
+  <text class="body" x="324" y="866">Local workspace files · model session · ACP child process</text>
+  <text class="small" x="82" y="895">Discarded at task exit; restart does not restore thread context from this local state.</text>
+  <text class="small" x="56" y="948">Environment filtering is minimization, not isolation: same-UID processes can inspect parent /proc state. CF app identity is the boundary.</text>
+  <text class="small" x="56" y="970">Lease mechanics are implemented; worker database provisioning, binding, and live task behavior remain unverified.</text>
+</svg>

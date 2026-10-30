@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1040" role="img" aria-labelledby="title desc">
+  <title id="title">Buzz Cloud Foundry reference architecture</title>
+  <desc id="desc">Local desktop and agent tasks connect to the Buzz relay. The identity adapter handles OIDC sign-in and NIP-FI assertions. The relay uses separate PostgreSQL, S3-compatible object storage, Valkey, and CredHub-backed secrets. A CF Task reaches the Tanzu Agent Buildpack, selected AI model, and scoped read-only MCP tool. Internal JWKS retrieval uses pinned mutual TLS.</desc>
+  <defs>
+    <marker id="arrow-cyan" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#4DD8E5"/></marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#B59AFF"/></marker>
+    <marker id="arrow-teal" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#48D7B0"/></marker>
+    <style>
+      .bg{fill:#0b1020}.panel{fill:#101a2c;stroke:#33435d;stroke-width:2}.client{stroke:#4dd8e5}.identity{stroke:#b59aff}.relay{stroke:#4dd8e5}.agent{stroke:#48d7b0}.store{fill:#0d1728;stroke:#60718a;stroke-width:2}.title{font:700 34px system-ui,sans-serif;fill:#f1f5fb}.section{font:700 17px system-ui,sans-serif;letter-spacing:1.4px;fill:#9eabc2}.heading{font:700 21px system-ui,sans-serif;fill:#f1f5fb}.body{font:17px system-ui,sans-serif;fill:#c1cce0}.small{font:15px system-ui,sans-serif;fill:#9eabc2}.lineC{stroke:#4dd8e5;stroke-width:3;fill:none;marker-end:url(#arrow-cyan)}.lineP{stroke:#b59aff;stroke-width:3;fill:none;stroke-dasharray:9 7;marker-end:url(#arrow-purple)}.lineT{stroke:#48d7b0;stroke-width:3;fill:none;marker-end:url(#arrow-teal)}.lineD{stroke:#75839b;stroke-width:2;fill:none;stroke-dasharray:5 6}.label{font:600 15px system-ui,sans-serif;fill:#d7e0ef}.chip{font:700 13px system-ui,sans-serif;fill:#0b1020}
+    </style>
+  </defs>
+  <rect class="bg" width="1600" height="1040" rx="24"/>
+  <text class="title" x="56" y="64">Buzz on Cloud Foundry</text>
+  <text class="section" x="56" y="105">SERVICE BOUNDARIES · DURABLE DATA · AUTHENTICATED FLOWS</text>
+
+  <rect x="340" y="132" width="1204" height="590" rx="22" fill="#0e1728" stroke="#586780" stroke-width="2" stroke-dasharray="10 8"/>
+  <text class="section" x="366" y="163">CLOUD FOUNDRY APPLICATIONS</text>
+
+  <rect class="panel client" x="48" y="190" width="246" height="156" rx="18"/>
+  <text class="heading" x="72" y="228">Local desktop</text>
+  <text class="body" x="72" y="260">Buzz identity + client key</text>
+  <text class="body" x="72" y="287">OS credential store</text>
+  <text class="small" x="72" y="320">System browser · loopback callback</text>
+
+  <rect class="panel identity" x="390" y="190" width="322" height="184" rx="18"/>
+  <text class="heading" x="416" y="229">Identity adapter</text>
+  <text class="body" x="416" y="261">OIDC login + exact allowlist</text>
+  <text class="body" x="416" y="289">Owner grants + NIP-FI issuer</text>
+  <text class="small" x="416" y="326">Separate identity PostgreSQL</text>
+  <rect x="416" y="341" width="168" height="23" rx="11" fill="#b59aff"/><text class="chip" x="432" y="358">mTLS JWKS · port 8443</text>
+
+  <rect class="panel" x="790" y="190" width="248" height="156" rx="18" stroke="#8290a6" stroke-width="2"/>
+  <text class="heading" x="814" y="228">Platform SSO</text>
+  <text class="body" x="814" y="260">OIDC provider</text>
+  <text class="small" x="814" y="291">Browser authentication</text>
+
+  <rect class="panel relay" x="1110" y="190" width="382" height="184" rx="18"/>
+  <text class="heading" x="1136" y="229">Buzz relay</text>
+  <text class="body" x="1136" y="261">WebSocket + HTTP · FI enforcement</text>
+  <text class="body" x="1136" y="289">Channel and event authorization</text>
+  <text class="small" x="1136" y="326">Relay PostgreSQL is the message record</text>
+
+  <rect class="panel agent" x="390" y="462" width="322" height="188" rx="18"/>
+  <text class="heading" x="416" y="502">Agent CF Task</text>
+  <text class="body" x="416" y="534">Buzz ACP supervisor</text>
+  <text class="body" x="416" y="562">Grant deadline + per-agent lease</text>
+  <text class="small" x="416" y="600">Child shares task app identity / privileges</text>
+
+  <rect class="panel agent" x="790" y="462" width="270" height="188" rx="18"/>
+  <text class="heading" x="816" y="502">ACP bridge</text>
+  <text class="body" x="816" y="534">ACP stdio ↔ chat stream</text>
+  <text class="body" x="816" y="562">Assistant text + tool progress</text>
+  <text class="small" x="816" y="600">Route comes from admitted event</text>
+
+  <rect class="panel agent" x="1138" y="442" width="354" height="208" rx="18"/>
+  <text class="heading" x="1164" y="482">Tanzu Agent Buildpack</text>
+  <text class="body" x="1164" y="514">Native agent loop · /api/chat</text>
+  <text class="body" x="1164" y="542">Tanzu AI model binding</text>
+  <text class="body" x="1164" y="570">MCP Gateway → scoped read-only tool</text>
+  <text class="small" x="1164" y="614">Shell off · filesystem off</text>
+
+  <rect x="1050" y="665" width="440" height="38" rx="12" fill="#251f39" stroke="#b59aff" stroke-width="1.5" stroke-dasharray="5 4"/>
+  <text class="small" x="1065" y="690">Credential Store · per-user delegation not end-to-end</text>
+
+  <!-- User flows -->
+  <path class="lineC" d="M294 244 H380"/>
+  <path class="lineP" d="M712 236 H778"/>
+  <path class="lineP" d="M778 306 H724"/>
+  <path class="lineC" d="M294 327 C520 420 914 420 1100 335"/>
+  <path class="lineP" d="M1300 190 C1300 148 550 148 550 190"/>
+  <text class="label" x="790" y="178">JWKS over internal mTLS · CF app GUID pin</text>
+  <path class="lineT" d="M712 514 H778"/>
+  <path class="lineT" d="M1060 548 H1126"/>
+  <path class="lineT" d="M650 462 C720 398 970 398 1120 374"/>
+  <path class="lineD" d="M1314 650 V660"/>
+
+  <!-- Bound data and secrets -->
+  <text class="section" x="56" y="770">SEPARATE SERVICE BINDINGS</text>
+  <rect class="store" x="56" y="800" width="250" height="122" rx="16"/>
+  <text class="heading" x="78" y="837">Relay PostgreSQL</text>
+  <text class="body" x="78" y="868">Durable events/messages</text>
+  <text class="small" x="78" y="897">Authoritative relay record</text>
+  <rect class="store" x="326" y="800" width="230" height="122" rx="16"/>
+  <text class="heading" x="348" y="837">S3-compatible</text>
+  <text class="body" x="348" y="868">Relay objects</text>
+  <text class="small" x="348" y="897">Media and object data</text>
+  <rect class="store" x="576" y="800" width="238" height="122" rx="16"/>
+  <text class="heading" x="598" y="837">Valkey / Redis</text>
+  <text class="body" x="598" y="868">Cache + pub/sub</text>
+  <text class="small" x="598" y="897">Lua-backed operations</text>
+  <rect class="store" x="834" y="800" width="238" height="122" rx="16"/>
+  <text class="heading" x="856" y="837">Identity PostgreSQL</text>
+  <text class="body" x="856" y="868">OIDC flows + grants</text>
+  <text class="small" x="856" y="897">Separate from relay DB</text>
+  <rect class="store" x="1092" y="800" width="250" height="122" rx="16"/>
+  <text class="heading" x="1114" y="837">Worker PostgreSQL</text>
+  <text class="body" x="1114" y="868">Dedicated advisory lease</text>
+  <text class="small" x="1114" y="897">One active task per agent</text>
+  <rect class="store" x="1362" y="800" width="182" height="122" rx="16"/>
+  <text class="heading" x="1382" y="837">CredHub</text>
+  <text class="body" x="1382" y="868">Bound secrets</text>
+  <text class="small" x="1382" y="897">App-scoped access</text>
+
+  <text class="small" x="56" y="746">Separate service bindings; each data store has its own persistence role.</text>
+  <text class="small" x="56" y="962">Topology only · no routes, app identifiers, keys, or credentials shown</text>
+  <text class="small" x="56" y="987">Environment filtering is not isolation; same-UID worker and child share the CF app identity and privileges.</text>
+</svg>

@@ -1,0 +1,958 @@
+diff --git a/crates/buzz-acp/src/acp.rs b/crates/buzz-acp/src/acp.rs
+index 026b234..b2aa213 100644
+--- a/crates/buzz-acp/src/acp.rs
++++ b/crates/buzz-acp/src/acp.rs
+@@ -171,6 +171,9 @@ pub struct AcpClient {
+     /// Used by [`cancel_with_cleanup`] to drain the correct response.
+     /// Set in [`session_prompt_with_idle_timeout`]; consumed in [`cancel_with_cleanup`].
+     last_prompt_id: Option<u64>,
++    /// Session associated with the current `session/prompt`; prevents late
++    /// notifications from a cancelled session being attributed to its successor.
++    current_prompt_session_id: Option<String>,
+     /// Hard deadline for the current turn, set by `session_prompt_with_idle_timeout`.
+     /// Inherited by `cancel_with_cleanup` so the drain loop shares the same budget
+     /// rather than starting a fresh timer (prevents double-jeopardy).
+@@ -221,6 +224,11 @@ pub struct AcpClient {
+     standard_usage: StandardUsageTracker,
+     /// Known adapter identity for prompt-response usage mapping.
+     standard_adapter: Option<StandardAdapterKind>,
++    /// Assistant text chunks observed during the current ACP prompt. This is
++    /// consumed by the parent only for explicitly enabled hosted adapters.
++    turn_response_text: String,
++    /// Once the response exceeds the publishable note limit, discard it whole.
++    turn_response_text_overflowed: bool,
+     /// Ask Claude Code for summarized thinking on `session/new`. Opus omits
+     /// readable thinking unless asked; set only when the CLI the adapter runs
+     /// is new enough to accept `--thinking-display`.
+@@ -380,6 +388,9 @@ const GOOSE_STEER_METHOD: &str = "_goose/unstable/session/steer";
+ /// `{outcome}`. Gated on [`AcpClient::steering_supported`].
+ const ACP_STEER_METHOD: &str = "_session/steering";
+ 
++/// Match the maximum content size accepted by `buzz_sdk::build_message`.
++const MAX_AUTO_PUBLISH_RESPONSE_BYTES: usize = 64 * 1024;
++
+ /// `outcome` value meaning the steer was applied to the turn Buzz is waiting
+ /// on, which therefore keeps running.
+ const STEER_OUTCOME_INJECTED: &str = "injected";
+@@ -623,6 +634,7 @@ impl AcpClient {
+             pending_permission_id: None,
+             permission_responded: false,
+             last_prompt_id: None,
++            current_prompt_session_id: None,
+             current_hard_deadline: None,
+             observer: None,
+             observer_agent_index: None,
+@@ -633,6 +645,8 @@ impl AcpClient {
+             goose_usage: UsageTracker::default(),
+             standard_usage: StandardUsageTracker::default(),
+             standard_adapter,
++            turn_response_text: String::new(),
++            turn_response_text_overflowed: false,
+             claude_thinking_summaries,
+         })
+     }
+@@ -863,6 +877,9 @@ impl AcpClient {
+         idle_timeout: std::time::Duration,
+         max_duration: std::time::Duration,
+     ) -> Result<StopReason, AcpError> {
++        self.turn_response_text.clear();
++        self.turn_response_text_overflowed = false;
++        self.current_prompt_session_id = Some(session_id.to_owned());
+         let params = build_prompt_params(session_id, prompt_blocks);
+         let hard_deadline = tokio::time::Instant::now() + max_duration;
+         self.current_hard_deadline = Some(hard_deadline);
+@@ -887,7 +904,9 @@ impl AcpClient {
+         tracing::debug!(target: "acp::wire", "→ {}", &serde_json::to_string(&msg).unwrap_or_default());
+         if let Err(e) = self.write_ndjson(&msg).await {
+             self.last_prompt_id = None;
++            self.current_prompt_session_id = None;
+             self.current_hard_deadline = None;
++            self.turn_response_text.clear();
+             return Err(e);
+         }
+ 
+@@ -906,6 +925,7 @@ impl AcpClient {
+         match &result {
+             Ok(_) => {
+                 self.last_prompt_id = None;
++                self.current_prompt_session_id = None;
+                 self.current_hard_deadline = None;
+             }
+             Err(AcpError::IdleTimeout(_) | AcpError::HardTimeout { .. }) => {
+@@ -914,7 +934,10 @@ impl AcpClient {
+             }
+             Err(_) => {
+                 self.last_prompt_id = None;
++                self.current_prompt_session_id = None;
+                 self.current_hard_deadline = None;
++                self.turn_response_text.clear();
++                self.turn_response_text_overflowed = false;
+             }
+         }
+         self.parse_prompt_response(session_id, &result?)
+@@ -940,6 +963,18 @@ impl AcpClient {
+         self.last_prompt_id.is_some()
+     }
+ 
++    /// Take the complete assistant text observed in the last prompt. Oversized
++    /// output is dropped in full rather than published partially.
++    pub fn take_turn_response_text(&mut self) -> Option<String> {
++        if self.turn_response_text_overflowed {
++            self.turn_response_text.clear();
++            self.turn_response_text_overflowed = false;
++            return None;
++        }
++        let text = std::mem::take(&mut self.turn_response_text);
++        (!text.trim().is_empty()).then_some(text)
++    }
++
+     /// Most recently observed goose `_meta.goose.activeRunId` from a
+     /// `session_info_update`, if any.
+     ///
+@@ -1104,6 +1139,9 @@ impl AcpClient {
+         let prompt_id = self.last_prompt_id.take().ok_or_else(|| {
+             AcpError::Protocol("cancel_with_cleanup called with no in-flight prompt".into())
+         })?;
++        self.current_prompt_session_id = None;
++        self.turn_response_text.clear();
++        self.turn_response_text_overflowed = false;
+ 
+         // Step 1: respond to any pending permission request with "cancelled",
+         // but only if we haven't already responded (guards against double-response race).
+@@ -1836,6 +1874,24 @@ impl AcpClient {
+             "agent_message_chunk" => {
+                 if let Some(text) = update["content"]["text"].as_str() {
+                     tracing::info!(target: "acp::stream", "{text}");
++                    let update_session_id = msg["params"]["sessionId"].as_str();
++                    if self.last_prompt_id.is_some()
++                        && self.current_prompt_session_id.as_deref() == update_session_id
++                        && !self.turn_response_text_overflowed
++                    {
++                        if self.turn_response_text.len().saturating_add(text.len())
++                            > MAX_AUTO_PUBLISH_RESPONSE_BYTES
++                        {
++                            self.turn_response_text.clear();
++                            self.turn_response_text_overflowed = true;
++                            tracing::warn!(
++                                target: "acp::stream",
++                                "assistant response exceeds auto-publish limit; dropping response"
++                            );
++                        } else {
++                            self.turn_response_text.push_str(text);
++                        }
++                    }
+                 }
+                 false
+             }
+@@ -3989,6 +4045,58 @@ sleep 1"#,
+ 
+     include!("acp/system_prompt_tests.rs");
+ 
++    #[tokio::test]
++    async fn completed_turn_text_is_bounded_and_consumed_once() {
++        let mut client = spawn_inert_client().await;
++        let update = |session_id: &str, text: &str| {
++            serde_json::json!({
++                "jsonrpc": "2.0",
++                "method": "session/update",
++                "params": {
++                    "sessionId": session_id,
++                    "update": {
++                        "sessionUpdate": "agent_message_chunk",
++                        "content": { "type": "text", "text": text }
++                    }
++                }
++            })
++        };
++
++        // Text outside an active prompt is never eligible for publication.
++        client.handle_session_update(&update("session-1", "stale"));
++        assert!(client.take_turn_response_text().is_none());
++
++        client.last_prompt_id = Some(1);
++        client.current_prompt_session_id = Some("session-1".into());
++        client.handle_session_update(&update("session-1", "hello "));
++        client.handle_session_update(&update("session-1", "world"));
++        assert_eq!(
++            client.take_turn_response_text().as_deref(),
++            Some("hello world")
++        );
++        assert!(
++            client.take_turn_response_text().is_none(),
++            "text must be consumed once"
++        );
++
++        client.last_prompt_id = Some(2);
++        client.current_prompt_session_id = Some("session-2".into());
++        client.handle_session_update(&update("session-1", "late output from previous session"));
++        assert!(
++            client.take_turn_response_text().is_none(),
++            "late chunks from the old session must not be captured"
++        );
++        client.handle_session_update(&update(
++            "session-2",
++            &"x".repeat(MAX_AUTO_PUBLISH_RESPONSE_BYTES + 1),
++        ));
++        assert!(
++            client.take_turn_response_text().is_none(),
++            "oversized response must be dropped whole"
++        );
++        client.shutdown().await;
++    }
++
+     #[tokio::test]
+     async fn active_run_id_sets_on_string() {
+         let mut client = spawn_inert_client().await;
+diff --git a/crates/buzz-acp/src/pool.rs b/crates/buzz-acp/src/pool.rs
+index 7a7e322..1116af0 100644
+--- a/crates/buzz-acp/src/pool.rs
++++ b/crates/buzz-acp/src/pool.rs
+@@ -2427,6 +2427,8 @@ pub async fn run_prompt_task(
+         Some(b) => PromptSource::Channel(b.scope.clone()),
+         None => PromptSource::Heartbeat,
+     };
++    let auto_publish_response =
++        std::env::var("BUZZ_ACP_AUTO_PUBLISH_RESPONSE").as_deref() == Ok("true");
+     let observer_channel_id = source.channel_id();
+     // Thread conversation context requires the canonical root to distinguish
+     // concurrent threads in the same channel's activity.
+@@ -3374,6 +3376,16 @@ pub async fn run_prompt_task(
+                             &source,
+                             &control_signal,
+                         );
++                        let mut response_text = agent.acp.take_turn_response_text();
++                        publish_auto_response(
++                            auto_publish_response,
++                            &ctx.rest_client,
++                            &source,
++                            batch.as_ref(),
++                            &StopReason::EndTurn,
++                            &mut response_text,
++                        )
++                        .await;
+                         let usage = agent.acp.take_turn_usage();
+                         publish_agent_turn_metric(
+                             &ctx,
+@@ -3460,6 +3472,17 @@ pub async fn run_prompt_task(
+             )
+             .await;
+ 
++            let mut response_text = agent.acp.take_turn_response_text();
++            publish_auto_response(
++                auto_publish_response,
++                &ctx.rest_client,
++                &source,
++                batch.as_ref(),
++                &stop_reason,
++                &mut response_text,
++            )
++            .await;
++
+             send_prompt_result(
+                 &result_tx,
+                 &turn_id,
+@@ -5565,6 +5588,99 @@ pub(crate) fn build_failure_notice_event(
+     }
+ }
+ 
++/// Build one agent-authored response using only the admitted channel and
++/// canonical thread from this turn. A top-level trigger becomes a new thread
++/// rooted at that trigger; a threaded trigger stays in its existing thread.
++fn build_auto_response_event(
++    keys: &nostr::Keys,
++    source: &PromptSource,
++    batch: Option<&FlushBatch>,
++    content: &str,
++) -> Option<nostr::Event> {
++    if content.trim().is_empty() || content.len() > 64 * 1024 {
++        return None;
++    }
++    let scope = source.scope()?;
++    let batch = batch?;
++    if scope != &batch.scope || batch.channel_id != scope.channel_id() {
++        return None;
++    }
++    let last_event = batch.events.last()?;
++    let routing_event_id = last_event.routing_event_id();
++    let thread_tags = last_event.routing_thread_tags();
++    let root = scope
++        .root_event_id()
++        .or(thread_tags.root_event_id.as_deref())
++        .unwrap_or(&routing_event_id);
++    let root_event_id = nostr::EventId::from_hex(root).ok()?;
++    let thread_ref = buzz_sdk::ThreadRef {
++        root_event_id,
++        // Replies stay flat under the trusted root; no model-selected parent
++        // can move them to another branch or channel.
++        parent_event_id: root_event_id,
++    };
++    let builder = buzz_sdk::build_message(
++        scope.channel_id(),
++        content,
++        Some(&thread_ref),
++        &[],
++        false,
++        &[],
++        &[],
++    )
++    .ok()?;
++    builder.sign_with_keys(keys).ok()
++}
++
++fn take_auto_response_event(
++    enabled: bool,
++    keys: &nostr::Keys,
++    source: &PromptSource,
++    batch: Option<&FlushBatch>,
++    stop_reason: &StopReason,
++    response_text: &mut Option<String>,
++) -> Option<nostr::Event> {
++    if !enabled || *stop_reason != StopReason::EndTurn {
++        response_text.take();
++        return None;
++    }
++    let content = response_text.take()?;
++    build_auto_response_event(keys, source, batch, &content)
++}
++
++/// Publish one completed ACP response only when the adapter explicitly opted
++/// in. Failed, cancelled, empty, oversized, heartbeat, and unrouteable turns
++/// are discarded without affecting prompt completion.
++async fn publish_auto_response(
++    enabled: bool,
++    rest: &RestClient,
++    source: &PromptSource,
++    batch: Option<&FlushBatch>,
++    stop_reason: &StopReason,
++    response_text: &mut Option<String>,
++) {
++    let Some(event) = take_auto_response_event(
++        enabled,
++        &rest.keys,
++        source,
++        batch,
++        stop_reason,
++        response_text,
++    ) else {
++        if enabled && *stop_reason == StopReason::EndTurn && response_text.is_none() {
++            tracing::warn!("completed hosted-agent response had no safe channel/thread route or publishable text");
++        }
++        return;
++    };
++    match tokio::time::timeout(Duration::from_secs(5), rest.submit_event(&event)).await {
++        Ok(Ok(_)) => {
++            tracing::info!(channel = %source.channel_id().unwrap_or_default(), "published hosted-agent response")
++        }
++        Ok(Err(error)) => tracing::warn!("hosted-agent response publication failed: {error}"),
++        Err(_) => tracing::warn!("hosted-agent response publication timed out"),
++    }
++}
++
+ /// Best-effort: remove a reaction via a signed kind:5 (NIP-09) deletion event.
+ ///
+ /// Queries kind:7 reactions by our pubkey targeting the event, finds the matching
+@@ -5692,6 +5808,128 @@ pub(crate) mod tests {
+         SessionScope::Conversation { channel_id }
+     }
+ 
++    #[test]
++    fn hosted_response_uses_admitted_channel_and_thread_and_is_consumed_once() {
++        let keys = Keys::generate();
++        let channel_id = Uuid::new_v4();
++        let root = "ab".repeat(32);
++        let scope = thread_scope(channel_id, &root);
++        let trigger = EventBuilder::new(Kind::Custom(9), "trigger")
++            .sign_with_keys(&Keys::generate())
++            .unwrap();
++        let batch = batch_with_scope(scope.clone(), trigger);
++        let source = PromptSource::Channel(scope);
++        let mut response = Some("answer from agent".to_owned());
++
++        let event = take_auto_response_event(
++            true,
++            &keys,
++            &source,
++            Some(&batch),
++            &StopReason::EndTurn,
++            &mut response,
++        )
++        .expect("eligible hosted response should create one event");
++        assert!(response.is_none());
++        assert!(
++            take_auto_response_event(
++                true,
++                &keys,
++                &source,
++                Some(&batch),
++                &StopReason::EndTurn,
++                &mut response,
++            )
++            .is_none(),
++            "a response can only be consumed once"
++        );
++        assert_eq!(event.kind, Kind::Custom(9));
++        assert_eq!(event.content, "answer from agent");
++        assert_eq!(event.pubkey, keys.public_key());
++        let h_tags: Vec<_> = event
++            .tags
++            .iter()
++            .filter_map(|tag| {
++                let fields = tag.as_slice();
++                (fields.first().map(String::as_str) == Some("h"))
++                    .then(|| fields.get(1).cloned())
++                    .flatten()
++            })
++            .collect();
++        assert_eq!(h_tags, vec![channel_id.to_string()]);
++        let e_tags: Vec<Vec<String>> = event
++            .tags
++            .iter()
++            .filter_map(|tag| {
++                let fields = tag.as_slice();
++                (fields.first().map(String::as_str) == Some("e")).then(|| fields.to_vec())
++            })
++            .collect();
++        assert_eq!(
++            e_tags,
++            vec![vec!["e".into(), root, "".into(), "reply".into()]]
++        );
++    }
++
++    #[test]
++    fn hosted_response_drops_disabled_cancelled_heartbeat_and_mismatched_routes() {
++        let keys = Keys::generate();
++        let channel_id = Uuid::new_v4();
++        let scope = conv(channel_id);
++        let trigger = EventBuilder::new(Kind::Custom(9), "trigger")
++            .sign_with_keys(&Keys::generate())
++            .unwrap();
++        let batch = batch_with_scope(scope.clone(), trigger);
++        for (enabled, stop_reason) in [
++            (false, StopReason::EndTurn),
++            (true, StopReason::Cancelled),
++            (true, StopReason::Refusal),
++        ] {
++            let mut response = Some("do not publish".to_owned());
++            let result = take_auto_response_event(
++                enabled,
++                &keys,
++                &PromptSource::Channel(scope.clone()),
++                Some(&batch),
++                &stop_reason,
++                &mut response,
++            );
++            assert!(result.is_none());
++            assert!(response.is_none(), "ineligible response text is discarded");
++        }
++
++        let mut response = Some("heartbeat must not publish".to_owned());
++        assert!(take_auto_response_event(
++            true,
++            &keys,
++            &PromptSource::Heartbeat,
++            Some(&batch),
++            &StopReason::EndTurn,
++            &mut response,
++        )
++        .is_none());
++        assert!(response.is_none());
++
++        let other_channel = Uuid::new_v4();
++        let other_scope = conv(other_channel);
++        let wrong_batch = batch_with_scope(
++            other_scope,
++            EventBuilder::new(Kind::Custom(9), "trigger")
++                .sign_with_keys(&Keys::generate())
++                .unwrap(),
++        );
++        let mut response = Some("do not cross channels".to_owned());
++        assert!(take_auto_response_event(
++            true,
++            &keys,
++            &PromptSource::Channel(conv(channel_id)),
++            Some(&wrong_batch),
++            &StopReason::EndTurn,
++            &mut response,
++        )
++        .is_none());
++    }
++
+     fn test_mcp_server() -> McpServer {
+         McpServer {
+             name: "dev".into(),
+diff --git a/crates/buzz-acp/src/relay.rs b/crates/buzz-acp/src/relay.rs
+index 0538233..9cc4e09 100644
+--- a/crates/buzz-acp/src/relay.rs
++++ b/crates/buzz-acp/src/relay.rs
+@@ -131,9 +131,13 @@ use buzz_core::kind::{
+ use futures_util::{SinkExt, StreamExt};
+ use nostr::{Event, EventBuilder, Keys, Kind, RelayUrl, Tag};
+ use serde_json::{json, Value};
++use std::sync::OnceLock;
+ use tokio::sync::mpsc;
+ use tokio::time::timeout;
+-use tokio_tungstenite::{connect_async, tungstenite::Message, MaybeTlsStream, WebSocketStream};
++use tokio_tungstenite::{
++    connect_async, tungstenite::client::IntoClientRequest, tungstenite::http::header::HeaderValue,
++    tungstenite::Message, MaybeTlsStream, WebSocketStream,
++};
+ use tracing::{debug, info, warn};
+ use uuid::Uuid;
+ 
+@@ -289,6 +293,222 @@ fn unix_now_secs() -> u64 {
+         .as_secs()
+ }
+ 
++const FI_ASSERTION_TIMEOUT: Duration = Duration::from_secs(10);
++const FI_ASSERTION_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
++const FI_ASSERTION_MAX_BODY_BYTES: usize = 16 * 1024;
++
++fn fi_assertion_http_client() -> Result<&'static reqwest::Client, RelayError> {
++    static CLIENT: OnceLock<Result<reqwest::Client, ()>> = OnceLock::new();
++    match CLIENT.get_or_init(|| {
++        reqwest::Client::builder()
++            .redirect(reqwest::redirect::Policy::none())
++            .connect_timeout(FI_ASSERTION_CONNECT_TIMEOUT)
++            .timeout(FI_ASSERTION_TIMEOUT)
++            .build()
++            .map_err(|_| ())
++    }) {
++        Ok(client) => Ok(client),
++        Err(()) => Err(RelayError::Http(
++            "could not initialize FI assertion HTTP client".into(),
++        )),
++    }
++}
++
++fn parse_fi_endpoint(endpoint: &str) -> Result<url::Url, RelayError> {
++    let parsed = endpoint
++        .parse::<url::Url>()
++        .map_err(|_| RelayError::Http("invalid BUZZ_FI_ASSERTION_URL".into()))?;
++    if parsed.scheme() != "https"
++        || parsed.host_str().is_none()
++        || !parsed.username().is_empty()
++        || parsed.password().is_some()
++        || parsed.query().is_some()
++        || parsed.fragment().is_some()
++    {
++        return Err(RelayError::Http(
++            "BUZZ_FI_ASSERTION_URL must be an HTTPS URL without userinfo, query, or fragment"
++                .into(),
++        ));
++    }
++    Ok(parsed)
++}
++
++fn validate_fi_status(status: reqwest::StatusCode) -> Result<(), RelayError> {
++    if status == reqwest::StatusCode::OK {
++        Ok(())
++    } else {
++        Err(RelayError::Http(format!(
++            "FI assertion request returned HTTP {status}"
++        )))
++    }
++}
++
++fn append_fi_body_chunk(body: &mut Vec<u8>, chunk: &[u8]) -> Result<(), RelayError> {
++    if body.len().saturating_add(chunk.len()) > FI_ASSERTION_MAX_BODY_BYTES {
++        return Err(RelayError::Http(
++            "FI assertion response exceeds the size limit".into(),
++        ));
++    }
++    body.extend_from_slice(chunk);
++    Ok(())
++}
++
++fn validate_fi_assertion_response(
++    body: &[u8],
++    expected_pubkey: &str,
++    now: i64,
++) -> Result<String, RelayError> {
++    #[derive(serde::Deserialize)]
++    struct AssertionResponse {
++        assertion: String,
++        nostr_pubkey: String,
++        expires_at: i64,
++    }
++
++    let response: AssertionResponse = serde_json::from_slice(body)
++        .map_err(|_| RelayError::Http("invalid FI assertion response".into()))?;
++    if response.nostr_pubkey != expected_pubkey {
++        return Err(RelayError::Http(
++            "FI assertion response key does not match the agent".into(),
++        ));
++    }
++    if response.assertion.is_empty()
++        || response.expires_at <= now
++        || response.expires_at.saturating_sub(now) > 300
++    {
++        return Err(RelayError::Http(
++            "FI assertion response has invalid expiry or assertion".into(),
++        ));
++    }
++
++    use base64::Engine;
++    let mut parts = response.assertion.split('.');
++    let (Some(header), Some(claims), Some(signature), None) =
++        (parts.next(), parts.next(), parts.next(), parts.next())
++    else {
++        return Err(RelayError::Http("FI assertion is not a compact JWT".into()));
++    };
++    if signature.is_empty() {
++        return Err(RelayError::Http("FI assertion JWT has no signature".into()));
++    }
++    let decode_json = |part: &str| -> Result<Value, RelayError> {
++        let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
++            .decode(part)
++            .map_err(|_| RelayError::Http("FI assertion JWT is malformed".into()))?;
++        serde_json::from_slice(&bytes)
++            .map_err(|_| RelayError::Http("FI assertion JWT is malformed".into()))
++    };
++    let header = decode_json(header)?;
++    let claims = decode_json(claims)?;
++    let issued_at = claims.get("iat").and_then(Value::as_i64);
++    let expires_at = claims.get("exp").and_then(Value::as_i64);
++    if !matches!(
++        header.get("alg").and_then(Value::as_str),
++        Some("ES256" | "RS256")
++    ) || header.get("typ").and_then(Value::as_str) != Some("nip-fi-agent+jwt")
++        || claims.get("nostr_pubkey").and_then(Value::as_str) != Some(expected_pubkey)
++        || expires_at != Some(response.expires_at)
++        || issued_at.is_none_or(|iat| iat > now.saturating_add(5))
++        || issued_at
++            .zip(expires_at)
++            .is_none_or(|(iat, exp)| exp <= iat || exp.saturating_sub(iat) > 300)
++    {
++        return Err(RelayError::Http(
++            "FI assertion JWT failed type, key, or expiry checks".into(),
++        ));
++    }
++    Ok(response.assertion)
++}
++
++/// Fetch a short-lived NIP-FI assertion for one relay authority.
++///
++/// The owner grant is only sent to the identity issuer. Relay requests receive
++/// the returned assertion in `Nostr-Federated-Identity`, alongside their
++/// ordinary route-specific NIP-98 proof.
++async fn fetch_fi_assertion(keys: &Keys, relay_url: &str) -> Result<Option<String>, RelayError> {
++    let endpoint = match std::env::var("BUZZ_FI_ASSERTION_URL") {
++        Ok(value) if !value.trim().is_empty() => value,
++        _ => {
++            if std::env::var_os("BUZZ_FI_GRANT_TOKEN").is_some() {
++                return Err(RelayError::Http(
++                    "BUZZ_FI_GRANT_TOKEN requires BUZZ_FI_ASSERTION_URL".into(),
++                ));
++            }
++            return Ok(None);
++        }
++    };
++    let grant = std::env::var("BUZZ_FI_GRANT_TOKEN").map_err(|_| {
++        RelayError::Http("BUZZ_FI_ASSERTION_URL requires BUZZ_FI_GRANT_TOKEN".into())
++    })?;
++    let parsed_endpoint = parse_fi_endpoint(&endpoint)?;
++
++    let body = serde_json::to_vec(&json!({
++        "agent_pubkey": keys.public_key().to_hex(),
++        "relay_url": relay_url,
++    }))
++    .map_err(|error| RelayError::Http(format!("FI assertion request encode error: {error}")))?;
++    use base64::Engine;
++    use sha2::{Digest, Sha256};
++    let tags = vec![
++        Tag::parse(["u", endpoint.as_str()])
++            .map_err(|error| RelayError::Http(format!("NIP-98 tag error: {error}")))?,
++        Tag::parse(["method", "POST"])
++            .map_err(|error| RelayError::Http(format!("NIP-98 tag error: {error}")))?,
++        Tag::parse(["nonce", &Uuid::new_v4().to_string()])
++            .map_err(|error| RelayError::Http(format!("NIP-98 tag error: {error}")))?,
++        Tag::parse(["payload", &hex::encode(Sha256::digest(&body))])
++            .map_err(|error| RelayError::Http(format!("NIP-98 tag error: {error}")))?,
++    ];
++    let proof = EventBuilder::new(Kind::HttpAuth, "")
++        .tags(tags)
++        .sign_with_keys(keys)
++        .map_err(|error| RelayError::Http(format!("NIP-98 sign error: {error}")))?;
++    let proof = base64::engine::general_purpose::STANDARD
++        .encode(serde_json::to_vec(&proof).map_err(|error| RelayError::Http(error.to_string()))?);
++    let response = fi_assertion_http_client()?
++        .post(parsed_endpoint)
++        .header("Authorization", format!("Bearer {grant}"))
++        .header("Nostr-Authorization", format!("Nostr {proof}"))
++        .header(reqwest::header::CONTENT_TYPE, "application/json")
++        .body(body)
++        .send()
++        .await
++        .map_err(|_| RelayError::Http("FI assertion request failed".into()))?;
++    validate_fi_status(response.status())?;
++    if response
++        .content_length()
++        .is_some_and(|length| length > FI_ASSERTION_MAX_BODY_BYTES as u64)
++    {
++        return Err(RelayError::Http(
++            "FI assertion response exceeds the size limit".into(),
++        ));
++    }
++    let mut response = response;
++    let mut body = Vec::with_capacity(
++        response
++            .content_length()
++            .unwrap_or_default()
++            .min(FI_ASSERTION_MAX_BODY_BYTES as u64) as usize,
++    );
++    while let Some(chunk) = response
++        .chunk()
++        .await
++        .map_err(|_| RelayError::Http("failed to read FI assertion response".into()))?
++    {
++        append_fi_body_chunk(&mut body, &chunk)?;
++    }
++    let assertion = validate_fi_assertion_response(
++        &body,
++        &keys.public_key().to_hex(),
++        chrono::Utc::now().timestamp(),
++    )?;
++    Ok(nip_fi_header(&assertion))
++}
++
++fn nip_fi_header(assertion: &str) -> Option<String> {
++    (!assertion.is_empty()).then(|| format!("Bearer {assertion}"))
++}
++
+ impl RestClient {
+     /// Fetch the relay's stable signing identity from its NIP-11 document.
+     ///
+@@ -471,7 +691,9 @@ impl RestClient {
+             .unwrap_or_else(|| RelayError::Http(format!("{method} {path} failed after retries"))))
+     }
+ 
+-    /// POST with NIP-98 auth and retry. Re-signs on each attempt.
++    /// The shared NIP-98 bridge path for POST /query, /count, and /events.
++    /// Public NIP-11 GETs are intentionally outside this identity path.
++    /// Re-signs each request attempt.
+     async fn bridge_post(
+         &self,
+         path: &str,
+@@ -480,6 +702,7 @@ impl RestClient {
+         let url = format!("{}{}", self.base_url, path);
+         let body_owned = body_bytes.to_vec();
+         let auth_tag_header = self.auth_tag_json.clone();
++        let fi_header = fetch_fi_assertion(&self.keys, &relay_http_to_ws(&self.base_url)).await?;
+         self.request_with_retry("POST", path, || {
+             // NIP-98 is re-signed each attempt (fresh created_at).
+             // sign_nip98 is infallible in practice (key is always valid).
+@@ -494,6 +717,9 @@ impl RestClient {
+             if let Some(ref tag) = auth_tag_header {
+                 req = req.header("x-auth-tag", tag);
+             }
++            if let Some(ref assertion) = fi_header {
++                req = req.header("Nostr-Federated-Identity", assertion);
++            }
+             req.body(body_owned.clone()).send()
+         })
+         .await
+@@ -3859,6 +4085,13 @@ pub(crate) fn relay_ws_to_http(url: &str) -> String {
+         .to_string()
+ }
+ 
++/// Convert a normalized relay HTTP base URL back to its WebSocket form for
++/// NIP-FI audience checks.
++pub(crate) fn relay_http_to_ws(url: &str) -> String {
++    url.replace("https://", "wss://")
++        .replace("http://", "ws://")
++}
++
+ /// Build the subscription ID for a channel: `ch-<uuid>`.
+ pub(crate) fn channel_sub_id(channel_id: Uuid) -> String {
+     format!("ch-{channel_id}")
+@@ -4216,7 +4449,19 @@ async fn do_connect(
+         .parse::<url::Url>()
+         .map_err(|e| RelayError::Http(format!("invalid relay URL: {e}")))?;
+ 
+-    let (ws, _response) = tokio::time::timeout(CONNECT_TIMEOUT, connect_async(parsed.as_str()))
++    let mut request = parsed
++        .as_str()
++        .into_client_request()
++        .map_err(|error| RelayError::Http(format!("invalid relay WebSocket request: {error}")))?;
++    if let Some(assertion) = fetch_fi_assertion(keys, relay_url).await? {
++        request.headers_mut().insert(
++            "Nostr-Federated-Identity",
++            HeaderValue::from_bytes(assertion.as_bytes()).map_err(|error| {
++                RelayError::Http(format!("invalid FI assertion header: {error}"))
++            })?,
++        );
++    }
++    let (ws, _response) = tokio::time::timeout(CONNECT_TIMEOUT, connect_async(request))
+         .await
+         .map_err(|_| RelayError::ConnectionClosed)? // timeout → treat as connection failure
+         .map_err(|e| RelayError::WebSocket(Box::new(e)))?;
+@@ -4386,6 +4631,169 @@ mod resume_tests;
+ 
+ #[cfg(test)]
+ mod tests {
++    fn test_fi_token(pubkey: &str, exp: i64, iat: i64, typ: &str, alg: &str) -> String {
++        use base64::Engine;
++        let encode = |value: Value| {
++            base64::engine::general_purpose::URL_SAFE_NO_PAD
++                .encode(serde_json::to_vec(&value).expect("serialize test JWT part"))
++        };
++        format!(
++            "{}.{}.test-signature",
++            encode(json!({"typ":typ,"alg":alg})),
++            encode(json!({"nostr_pubkey":pubkey,"iat":iat,"exp":exp}))
++        )
++    }
++
++    fn test_fi_response(pubkey: &str, token: &str, exp: i64) -> Vec<u8> {
++        serde_json::to_vec(&json!({
++            "assertion": token,
++            "nostr_pubkey": pubkey,
++            "expires_at": exp,
++        }))
++        .expect("serialize test FI response")
++    }
++
++    #[test]
++    fn nip_fi_identity_header_uses_bearer_scheme() {
++        assert_eq!(
++            nip_fi_header("signed-assertion"),
++            Some("Bearer signed-assertion".into())
++        );
++        assert_eq!(nip_fi_header(""), None);
++    }
++
++    #[test]
++    fn fi_endpoint_rejects_plaintext_userinfo_query_and_fragment() {
++        for endpoint in [
++            "http://identity.example/v1/agents/assertions",
++            "https://user@identity.example/v1/agents/assertions",
++            "https://identity.example/v1/agents/assertions?next=https://evil.example",
++            "https://identity.example/v1/agents/assertions#fragment",
++        ] {
++            assert!(parse_fi_endpoint(endpoint).is_err(), "accepted {endpoint}");
++        }
++        assert!(parse_fi_endpoint("https://identity.example/v1/agents/assertions").is_ok());
++    }
++
++    #[test]
++    fn fi_assertion_exchange_refuses_redirect_and_other_status_codes() {
++        assert!(validate_fi_status(reqwest::StatusCode::OK).is_ok());
++        for status in [
++            reqwest::StatusCode::FOUND,
++            reqwest::StatusCode::CREATED,
++            reqwest::StatusCode::UNAUTHORIZED,
++        ] {
++            assert!(
++                validate_fi_status(status).is_err(),
++                "accepted HTTP {status}"
++            );
++        }
++    }
++
++    #[tokio::test]
++    async fn fi_assertion_client_does_not_follow_redirects() {
++        use tokio::io::{AsyncReadExt, AsyncWriteExt};
++        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
++            .await
++            .expect("bind redirect test server");
++        let address = listener.local_addr().expect("redirect test address");
++        let server = tokio::spawn(async move {
++            let (mut socket, _) = listener.accept().await.expect("accept request");
++            let mut request = vec![0; 2048];
++            let _ = socket.read(&mut request).await;
++            socket
++                .write_all(
++                    b"HTTP/1.1 302 Found\r\nLocation: /redirect-target\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
++                )
++                .await
++                .expect("write redirect");
++        });
++        let response = fi_assertion_http_client()
++            .expect("FI client")
++            .get(format!("http://{address}/assertions"))
++            .send()
++            .await
++            .expect("receive redirect response");
++        assert_eq!(response.status(), reqwest::StatusCode::FOUND);
++        assert!(validate_fi_status(response.status()).is_err());
++        server.await.expect("redirect server");
++    }
++
++    #[test]
++    fn fi_assertion_exchange_binds_agent_key_and_short_expiry() {
++        let now = 1_800_000_000;
++        let pubkey = "ab".repeat(32);
++        let token = test_fi_token(&pubkey, now + 180, now, "nip-fi-agent+jwt", "ES256");
++        assert_eq!(
++            validate_fi_assertion_response(
++                &test_fi_response(&pubkey, &token, now + 180),
++                &pubkey,
++                now,
++            )
++            .expect("valid assertion"),
++            token
++        );
++
++        let wrong_pubkey = "cd".repeat(32);
++        assert!(validate_fi_assertion_response(
++            &test_fi_response(&wrong_pubkey, &token, now + 180),
++            &pubkey,
++            now,
++        )
++        .is_err());
++        let wrong_claim = test_fi_token(&wrong_pubkey, now + 180, now, "nip-fi-agent+jwt", "ES256");
++        assert!(validate_fi_assertion_response(
++            &test_fi_response(&pubkey, &wrong_claim, now + 180),
++            &pubkey,
++            now,
++        )
++        .is_err());
++        let wrong_type = test_fi_token(&pubkey, now + 180, now, "nip-fi+jwt", "ES256");
++        assert!(validate_fi_assertion_response(
++            &test_fi_response(&pubkey, &wrong_type, now + 180),
++            &pubkey,
++            now,
++        )
++        .is_err());
++        let unsupported_algorithm =
++            test_fi_token(&pubkey, now + 180, now, "nip-fi-agent+jwt", "none");
++        assert!(validate_fi_assertion_response(
++            &test_fi_response(&pubkey, &unsupported_algorithm, now + 180),
++            &pubkey,
++            now,
++        )
++        .is_err());
++    }
++
++    #[test]
++    fn fi_assertion_exchange_rejects_expired_and_overlong_assertions() {
++        let now = 1_800_000_000;
++        let pubkey = "ab".repeat(32);
++        for exp in [now, now - 1, now + 301] {
++            let token = test_fi_token(&pubkey, exp, now, "nip-fi-agent+jwt", "ES256");
++            assert!(validate_fi_assertion_response(
++                &test_fi_response(&pubkey, &token, exp),
++                &pubkey,
++                now,
++            )
++            .is_err());
++        }
++        let mismatched_exp = test_fi_token(&pubkey, now + 181, now, "nip-fi-agent+jwt", "ES256");
++        assert!(validate_fi_assertion_response(
++            &test_fi_response(&pubkey, &mismatched_exp, now + 180),
++            &pubkey,
++            now,
++        )
++        .is_err());
++    }
++
++    #[test]
++    fn fi_assertion_response_body_is_bounded() {
++        let mut body = Vec::new();
++        assert!(append_fi_body_chunk(&mut body, &vec![b'x'; FI_ASSERTION_MAX_BODY_BYTES]).is_ok());
++        assert!(append_fi_body_chunk(&mut body, b"x").is_err());
++    }
++
+     use super::*;
+ 
+     #[test]

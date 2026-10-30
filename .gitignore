@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.credentials/
+.state/
+dist/
+artifacts/
+*.log
+.DS_Store
+upstream/

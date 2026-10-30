@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1400 920" role="img" aria-labelledby="title desc">
+  <title id="title">Owner, teammate, channel, and agent workflow</title>
+  <desc id="desc">An owner enrolls an agent through SSO and invites its identity to a project channel. The author gate defaults to owner-only. A selected teammate is admitted only after the operator allowlists the teammate's verified Buzz public key and the agent is a channel member. The teammate explicitly mentions one agent in a thread. That agent responds in the same canonical thread; thread-isolated model context requires the thread session policy.</desc>
+  <defs>
+    <marker id="arrow-cyan" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#4DD8E5"/></marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#B59AFF"/></marker>
+    <marker id="arrow-teal" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#48D7B0"/></marker>
+    <marker id="arrow-red" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto"><path d="M0,0 L10,4 L0,8 Z" fill="#FF8C9B"/></marker>
+    <style>
+      .bg{fill:#0b1020}.card{fill:#101a2c;stroke:#33435d;stroke-width:2}.owner{stroke:#b59aff}.agent{stroke:#48d7b0}.channel{stroke:#4dd8e5}.warn{stroke:#ff8c9b}.title{font:700 32px system-ui,sans-serif;fill:#f1f5fb}.sub{font:600 16px system-ui,sans-serif;letter-spacing:1.2px;fill:#9eabc2}.head{font:700 20px system-ui,sans-serif;fill:#f1f5fb}.body{font:16px system-ui,sans-serif;fill:#c1cce0}.small{font:14px system-ui,sans-serif;fill:#9eabc2}.cyan{stroke:#4dd8e5;stroke-width:3;fill:none;marker-end:url(#arrow-cyan)}.purple{stroke:#b59aff;stroke-width:3;fill:none;marker-end:url(#arrow-purple)}.teal{stroke:#48d7b0;stroke-width:3;fill:none;marker-end:url(#arrow-teal)}.red{stroke:#ff8c9b;stroke-width:3;fill:none;marker-end:url(#arrow-red)}.dash{stroke-dasharray:8 7}.label{font:600 14px system-ui,sans-serif;fill:#d7e0ef}.pill{fill:#251f39;stroke:#b59aff;stroke-width:1.5}.pillText{font:700 13px system-ui,sans-serif;fill:#d7c8ff}
+    </style>
+  </defs>
+  <rect class="bg" width="1400" height="920" rx="24"/>
+  <text class="title" x="52" y="62">Who answers in a project thread?</text>
+  <text class="sub" x="52" y="98">OWNER AUTHORIZES · CHANNEL MEMBER MENTIONS ONE AGENT · ACP GATE ADMITS THE MESSAGE</text>
+
+  <rect class="card owner" x="58" y="154" width="286" height="164" rx="18"/>
+  <text class="head" x="84" y="194">Agent owner</text>
+  <text class="body" x="84" y="228">SSO enrollment + agent grant</text>
+  <text class="body" x="84" y="256">Invites agent identity to channel</text>
+  <text class="small" x="84" y="288">Ownership remains with one person</text>
+
+  <rect class="card owner" x="420" y="154" width="286" height="164" rx="18"/>
+  <text class="head" x="446" y="194">Identity adapter</text>
+  <text class="body" x="446" y="228">Issues short-lived agent assertions</text>
+  <text class="body" x="446" y="256">Grant bound to agent key + relay</text>
+  <text class="small" x="446" y="288">No channel or tool grant</text>
+
+  <rect class="card agent" x="790" y="154" width="254" height="164" rx="18"/>
+  <text class="head" x="816" y="194">Agent identity</text>
+  <text class="body" x="816" y="228">Own Buzz public key</text>
+  <text class="body" x="816" y="256">CF Task + ACP supervisor</text>
+  <text class="small" x="816" y="288">Member of the project channel</text>
+
+  <rect class="card channel" x="1120" y="154" width="226" height="164" rx="18"/>
+  <text class="head" x="1146" y="194">Project channel</text>
+  <text class="body" x="1146" y="228">People + agent are members</text>
+  <text class="body" x="1146" y="256">Membership gates access</text>
+  <text class="small" x="1146" y="288">Messages persist on relay</text>
+
+  <path class="purple" d="M344 220 H408"/>
+  <text class="label" x="350" y="202">enroll</text>
+  <path class="teal" d="M344 273 C510 368 785 368 908 330"/>
+  <path class="cyan" d="M1044 240 H1108"/>
+  <text class="label" x="1049" y="222">membership</text>
+
+  <line x1="58" y1="392" x2="1346" y2="392" stroke="#26364d" stroke-width="2"/>
+  <text class="sub" x="58" y="430">AUTHOR POLICY: OWNER ONLY BY DEFAULT</text>
+
+  <rect x="58" y="464" width="328" height="148" rx="18" fill="#211923" stroke="#ff8c9b" stroke-width="2"/>
+  <text class="head" x="84" y="504">Default: owner-only</text>
+  <text class="body" x="84" y="538">Owner's messages may be admitted</text>
+  <text class="body" x="84" y="566">A teammate mention is dropped</text>
+  <text class="small" x="84" y="592">A mention alone does not bypass this gate</text>
+
+  <rect class="card owner" x="454" y="464" width="390" height="148" rx="18"/>
+  <text class="head" x="480" y="504">Selected teammate allowlist</text>
+  <text class="body" x="480" y="538">agents.NAME.respondTo=allowlist</text>
+  <text class="body" x="480" y="566">Verified keys in respondToAllowlist</text>
+  <text class="small" x="480" y="592">Owner included automatically</text>
+
+  <rect class="card channel" x="914" y="464" width="432" height="148" rx="18"/>
+  <text class="head" x="940" y="504">Teammate is also a channel member</text>
+  <text class="body" x="940" y="538">Both author policy + membership must pass</text>
+  <text class="body" x="940" y="566">Then an explicit @agent mention is eligible</text>
+  <text class="small" x="940" y="592">Other agents do not answer automatically</text>
+
+  <path class="purple" d="M386 536 H442"/>
+  <text class="label" x="389" y="518">operator change</text>
+  <path class="teal" d="M844 536 H902"/>
+  <text class="label" x="850" y="518">allowlisted</text>
+
+  <rect class="card agent" x="166" y="682" width="398" height="144" rx="18"/>
+  <text class="head" x="192" y="722">Thread message</text>
+  <text class="body" x="192" y="756">Member replies and names one agent</text>
+  <text class="body" x="192" y="784">Include request + relevant constraints</text>
+  <text class="small" x="192" y="810">Canonical source thread determines route</text>
+
+  <rect class="card agent" x="638" y="682" width="310" height="144" rx="18"/>
+  <text class="head" x="664" y="722">Selected agent</text>
+  <text class="body" x="664" y="756">ACP admits authorized event</text>
+  <text class="body" x="664" y="784">Only addressed agent is selected</text>
+  <text class="small" x="664" y="810">Session scope is operator-configured</text>
+
+  <rect class="card channel" x="1022" y="682" width="324" height="144" rx="18"/>
+  <text class="head" x="1048" y="722">Reply in same thread</text>
+  <text class="body" x="1048" y="756">Buzz publishes to admitted route</text>
+  <text class="body" x="1048" y="784">thread policy → isolated context</text>
+  <text class="small" x="1048" y="810">Without it, session is per-channel</text>
+
+  <path class="teal" d="M564 754 H626"/>
+  <text class="label" x="566" y="736">mention + gates</text>
+  <path class="teal" d="M948 754 H1010"/>
+  <text class="label" x="951" y="736">successful turn</text>
+
+  <text class="small" x="58" y="880">Owner grant ≠ channel membership ≠ author allowlist ≠ model/tool permissions.</text>
+</svg>
