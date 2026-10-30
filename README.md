@@ -2,7 +2,7 @@
   <img src="docs/assets/hero.webp" alt="Abstract midnight-blue field with cyan and violet light" width="100%">
 </p>
 
-# Buzz on Cloud Foundry
+# Buzz Platform Reference
 
 **A Cloud Foundry reference deployment for shared Buzz project conversations and owner-managed agents.**
 
@@ -10,6 +10,7 @@
 [![Platform: Cloud Foundry](https://img.shields.io/badge/platform-Cloud%20Foundry-29c6ef.svg)](https://www.cloudfoundry.org/)
 [![Client: Buzz](https://img.shields.io/badge/client-Buzz-8b83ff.svg)](https://github.com/block/buzz)
 [![Status: pilot reference](https://img.shields.io/badge/status-pilot%20reference-f0bf69.svg)](docs/tmm-validation.md)
+[![Reference checks](https://github.com/nkuhn-vmw/buzz-platform-reference/actions/workflows/ci.yml/badge.svg)](https://github.com/nkuhn-vmw/buzz-platform-reference/actions/workflows/ci.yml)
 
 [Install](docs/install.md) · [Get started](docs/getting-started.md) · [Use Buzz with a team](docs/using-buzz.md) · [Configure agents](docs/agents.md) · [Architecture](docs/architecture.md)
 
@@ -23,7 +24,7 @@ The deployment uses platform service bindings for persistence, identity, model a
 
 ## Validation status
 
-This source tree is a pilot reference. In a private pilot, operator and desktop SSO, channel message persistence, and a native ACP/model/Gateway read-only tool probe have succeeded. A TLS-enabled PostgreSQL plan was approved and applied, and the fresh worker database has been provisioned; binding, staging, and TLS connectivity checks remain, so hosted worker and multi-human allowlist behavior are not yet verified. The [validation guide](docs/tmm-validation.md) separates these results from the remaining acceptance checks. Screenshots show two real desktop setup screens, not proof of a public service.
+This source tree is a pilot reference. In a private pilot, operator/desktop SSO, channel message persistence, and live owner-authorized Helper (Tanzu) and Researcher (Buzz built-in) turns through the read-only Gateway tool have succeeded. The worker PostgreSQL connection verified TLS 1.3 and its certificate in a CF Task. Multi-human allowlist behavior, live grant-expiry timing, signed desktop distribution, and final desktop agent-thread capture remain unverified. See the [validation guide](docs/tmm-validation.md) for evidence boundaries; these results do not establish whole-pilot acceptance or a public service.
 
 ## Start here
 
@@ -38,7 +39,7 @@ This source tree is a pilot reference. In a private pilot, operator and desktop 
 
 ## Screenshots
 
-The [getting-started guide](docs/getting-started.md) includes authentic screenshots of the desktop sign-in entry point and private channel creation form. A screenshot showing an agent invoked and replying in its source thread remains pending worker activation.
+The [getting-started guide](docs/getting-started.md) includes authentic screenshots of the desktop sign-in entry point and private channel creation form. The agent-thread screenshot is pending capture; live turns have been verified separately as recorded in the validation guide.
 
 ## Contributing and security
 

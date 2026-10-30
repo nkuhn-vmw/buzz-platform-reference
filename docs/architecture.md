@@ -95,17 +95,21 @@ isolation boundary. Arbitrary code in a worker tool can exercise the worker's
 app privileges. In the separate native Buildpack app, shell and filesystem
 tools are disabled; its tools run with that app's own identity and bindings.
 
-The task's working directory, files, and model session live only for that task
-run. A restart can therefore lose local and model-session context. Relay events
-and replies remain in the relay's PostgreSQL store. A thread-scoped ACP
-session policy isolates conversation context by canonical thread; this setting
-must be present in the deployed configuration before that isolation can be
-claimed.
+The task's working directory, files, and provider session live only for that
+task run. Relay events and replies remain in the relay's PostgreSQL store. In
+the private pilot, after a controlled Helper restart the agent recalled a prior
+thread nonce from relay history, while a fresh top-level thread returned a
+distinct `NEW_THREAD` response. This confirms transcript-backed context for
+those cases; it does not make local files or the provider session durable. A
+thread-scoped ACP session policy is set by the activation helper.
 
-The worker implementation defines the advisory-lock and fail-stop mechanics.
-The deployed task must bind the dedicated PostgreSQL service with a direct
-connection. The diagram describes the intended public task contract; it is not
-evidence of a verified live worker.
+The worker implementation defines advisory-lock and fail-stop mechanics. The
+private pilot verified Helper and Researcher worker turns and TLS 1.3 with a
+verified certificate in the Helper's worker PostgreSQL connection. It also
+verified duplicate-task refusal and a controlled Helper restart. The diagram
+describes the wider intended task contract; it does not establish every edge
+as live-tested. In particular, live grant-expiry timing remains untested and
+TLS is not claimed for the unchanged relay and identity PostgreSQL instances.
 
 ## Team and thread workflow
 
@@ -134,7 +138,7 @@ remain conversation-scoped.
 | --- | --- | --- |
 | Relay | PostgreSQL event store, S3-compatible object storage, Valkey-compatible Redis, CredHub-backed secrets | Rendered bindings, routes, and service policy in the target space |
 | Identity | OIDC login, scoped agent grants, signed NIP-FI assertions, dedicated PostgreSQL state | Real SSO, allow/deny behavior, key rotation, and mTLS JWKS on the target deployment |
-| Agent | CF Task, per-agent lease target, grant deadline, stop-on-lease-loss, native Buildpack ACP adapter | Worker database binding, task lifecycle, duplicate-task refusal, recovery, and live tool policy |
+| Agent | Helper/Tanzu and Researcher/built-in owner-authorized turns, worker PostgreSQL TLS 1.3 certificate verification, duplicate-task refusal, controlled restart | Two-human allowlist, live grant-expiry timer, relay/identity database TLS, and full signed desktop distribution |
 | Desktop | Local OIDC browser handoff and OS credential-store session handling | Signed/notarized distribution and a sanitized end-user onboarding run |
 | Credential Store | Optional native Buildpack support for outbound SSO credential forwarding | Per-user delegation through the Buzz ACP runtime is not implemented end to end |
 

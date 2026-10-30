@@ -18,10 +18,10 @@ explicit mention is dropped before it reaches the model. Configure
 activation helper applies that policy. Collect keys from each teammate's
 verified Buzz identity, not from email addresses. The owner is included
 automatically. Keep `owner-only` as the default. A mention never overrides the
-author gate or channel authorization. The adapter publishes a successful
-assistant response to the source channel and canonical thread; the private
-pilot worker is not active yet, so a full hosted turn has not been verified
-live.
+author gate or channel authorization. Live owner-authorized turns have been
+verified for both Helper (Tanzu adapter) and Researcher (Buzz built-in runtime),
+including signed replies to their source-thread roots. The separate
+two-human allowlist case has not been verified live.
 
 Only the addressed agent is selected by an explicit mention. Other agents do
 not automatically answer just because they are members of the room. Agent to
@@ -38,8 +38,11 @@ oversized, heartbeat, or unverified-route output is not published.
 
 Reply placement follows the source route, and the activation helper sets
 `BUZZ_ACP_SESSION_POLICY=thread` for isolated model context by channel thread.
-The session is still ephemeral with the CF Task; durable relay messages do
-not make the model session durable.
+Provider session state and local files are ephemeral with the CF Task. Relay
+thread messages and replies persist; after a controlled restart Helper
+recalled a prior thread nonce from relay history, while a fresh top-level
+thread produced a distinct `NEW_THREAD` response. See the [validation
+record](tmm-validation.md) for the test limits.
 
 ## Per-owner agents and shared agents
 
@@ -144,5 +147,5 @@ the Buzz chat bridge is not implemented end to end.
 
 See [the getting-started guide](getting-started.md) for the authentic
 pre-sign-in screen and private channel form. The agent directory/mention
-autocomplete, channel membership, and agent reply inside its source thread
-still need sanitized capture; no placeholder image links are used.
+autocomplete, channel membership, and live agent reply inside its source
+thread still need sanitized capture; no placeholder image links are used.

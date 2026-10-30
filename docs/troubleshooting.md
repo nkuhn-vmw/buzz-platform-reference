@@ -19,7 +19,7 @@ node scripts/deploy.mjs status
 | Agent does not answer | Confirm it is in the channel, the message explicitly mentions it, the sender is admitted by the agent's author policy, and a worker task is active. Check sanitized recent logs with `node scripts/cf.mjs logs buzz-agent --recent`. |
 | Native agent probe fails | Inspect `buzz-agent`, `buzz-platform-agent`, and the bound AI/Gateway services with `node scripts/deploy.mjs status`; then check recent logs for the worker and platform agent. Verify the model supports tool calls and Gateway binding is healthy. |
 | Agent repeats or appears stuck | Inspect task state and recent logs before retrying. Check the configured dedicated PostgreSQL binding and lease errors. Do not start duplicate tasks as a recovery shortcut. |
-| Agent activation refuses the database | The worker requires a verified TLS PostgreSQL connection and a dedicated direct connection for its session lock. The current pilot plan has TLS disabled; confirm a suitable approved plan before retrying activation. |
+| Agent activation refuses the database | The worker requires verified TLS and a dedicated direct connection for its session lock. The private pilot verified TLS 1.3 and the certificate in the Helper task; for another target, inspect the binding, CA chain, and direct-connection support before retrying. |
 | Desktop connects but sign-in fails | Ask the operator to verify the configured OIDC issuer/provider and allowed-user policy. Do not send authorization codes or session data in chat. |
 
 To inspect known CF objects through the verified wrapper:

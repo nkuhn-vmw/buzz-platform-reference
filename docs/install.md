@@ -7,7 +7,7 @@ This guide is for a Cloud Foundry operator preparing a pilot in a dedicated, app
 - Node.js 24.x and Cloud Foundry CLI 8, logged in with permission to create services, apps, bindings, routes, and tasks in the target space.
 - Docker for packaging the pinned relay image.
 - A macOS build host with Xcode Command Line Tools, Git, pnpm, and Rust for the desktop bundle.
-- Operator-selected service offerings and plans matching the template: PostgreSQL with verified TLS/direct connections, Lua-capable Redis, S3-compatible object storage, AI model service, SSO/identity, MCP Gateway, Credential Store, and CredHub. Availability and plan names are foundation-specific; obtain and verify them with the platform operator. In the current pilot, the TLS-enabled PostgreSQL plan is approved and applied and the fresh worker database is provisioned; binding, app staging, and TLS connectivity checks still need completion before worker activation.
+- Operator-selected service offerings and plans matching the template: PostgreSQL with verified TLS/direct connections, Lua-capable Redis, S3-compatible object storage, AI model service, SSO/identity, MCP Gateway, Credential Store, and CredHub. Availability and plan names are foundation-specific; obtain and verify them with the platform operator. In the current pilot, the Helper CF Task verified TLS 1.3 and its worker database certificate; this does not verify TLS for the relay or identity databases.
 - An approved OIDC issuer/provider and an allowlist of pilot user email addresses.
 
 ## Configure and verify the target

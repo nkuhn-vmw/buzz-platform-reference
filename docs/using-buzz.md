@@ -68,8 +68,9 @@ deployment config. Ask each teammate to provide the key shown by their
 verified Buzz identity; do not build this list from email addresses. The owner
 is included automatically. This admits message authors; each teammate and the
 agent identity still need channel access. Ask the operator if an agent does
-not answer. The private pilot worker is not active yet, so hosted agent
-invocation remains unverified live.
+not answer. The private pilot has verified owner-authorized Helper and
+Researcher turns; a two-human allowlist workshop has not run, so teammate
+allowlist behavior remains unverified live.
 
 For the hosted Tanzu adapter, the Buzz supervisor supplies the route from the
 admitted source event. The adapter forwards the prompt and returns assistant
@@ -81,8 +82,9 @@ is intended to be isolated by channel thread. Confirm the rendered and deployed
 setting before relying on this behavior; a configuration change may select a
 different session policy.
 
-The mention-and-reply screenshot remains pending: the pilot worker is not
-active while its fresh PostgreSQL database is provisioned and bound.
+The mention-and-reply screenshot remains pending capture. Live Helper and
+Researcher turns have been verified separately; the final desktop UI capture
+has not been made.
 
 ## Who can see or use an agent?
 
@@ -93,8 +95,8 @@ make the agent a member of every channel, grant a human's roles, or expand the
 agent's model/tool permissions. Channel membership and runtime service bindings
 are separate controls.
 
-The private pilot has verified channel creation and message persistence, but
-not a two-human shared-room workshop or an agent answer: the worker is not
-active. Team members need both channel access and an author policy that admits
-their messages. These results do not represent a public deployment or a
-generally available desktop installer.
+The private pilot has verified channel creation, message persistence, and
+owner-authorized agent answers. A two-human shared-room/allowlist workshop and
+signed, generally available desktop distribution are not verified. Team
+members need both channel access and an author policy that admits their
+messages. These results do not represent a public deployment.

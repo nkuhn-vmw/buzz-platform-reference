@@ -1,8 +1,9 @@
 # Agent runtimes
 
-This page distinguishes the private pilot's verified native model/tool path
-from worker behavior and runtime alternatives that remain unverified or
-proposed. A private pilot deployment is not a public or production service.
+This page distinguishes the private pilot's verified Helper and Researcher
+runtime turns from lifecycle checks and runtime alternatives that remain
+unverified or proposed. A private pilot deployment is not a public or
+production service.
 
 ## Native integration: Tanzu Agent Buildpack
 
@@ -30,10 +31,12 @@ its security boundary; verify deployed bindings and effective server
 configuration.
 
 In the current private pilot, the direct native ACP → model → Gateway
-read-only-tool probe passed with its expected nonce. The TLS-enabled worker DB
-has been provisioned, but binding, app staging, and TLS connectivity checks
-remain. The worker is not active, so this does not yet verify relay-triggered
-agent turns or thread reply publication.
+read-only-tool probe passed with its expected nonce. Helper also completed an
+owner-authorized relay turn through this adapter and replied in the exact
+source-thread root; the tool nonce matched backend logs. Its CF Task verified
+the dedicated worker PostgreSQL connection using TLS 1.3 with the certificate
+verified. This does not establish TLS for the separate relay or identity
+databases.
 
 Model selection is explicit. The launcher resolves a named `ai-models` service
 binding and model ID; it fails when the binding is missing/ambiguous or the
@@ -83,11 +86,16 @@ session state are ephemeral; a task restart may begin a fresh model session.
 The worker must stop when it loses its lease, and duplicate tasks must not
 process the same agent concurrently.
 
-The current private pilot has not activated its worker. A TLS-enabled
-PostgreSQL plan is approved and applied and the fresh worker database is
-provisioned; binding, app staging, and TLS connectivity checks remain. The
-lease, restart behavior, and hosted worker must not be described as verified
-live until those checks pass.
+The current private pilot has an active Helper worker with the verified TLS
+connection above. A second Helper task was refused while the first held its
+lease. Controlled restart/reactivation succeeded; the earlier relay thread
+transcript remained available and Helper recalled its prior nonce without
+another tool call. A fresh top-level thread returned a distinct `NEW_THREAD`
+response. This demonstrates transcript-backed context across that restart; it
+does not mean the provider session or task-local files persist. Linux TLS
+fixture/CI coverage exercises lease loss and process-group termination. Grant
+expiry timing has not been exercised in a live task; see the [validation
+guide](tmm-validation.md) for the remaining scope and evidence limits.
 
 ## Built-in Buzz runtime
 
@@ -98,9 +106,14 @@ access the configured MCP backend, while the launcher enables the same bounded
 ACP response publisher used by the Tanzu adapter.
 
 This alternative is present in source and can be selected for a named agent
-with `agents.NAME.runtime` set to `builtin`. It has not been deployed or
-verified live. It needs the same owner grant, relay/channel authorization,
-service-binding review, and task-lifecycle validation as the Buildpack path.
+with `agents.NAME.runtime` set to `builtin`. The private-pilot Researcher
+completed an owner-authorized relay turn through AI Services and the read-only
+Gateway tool, then published a signed reply to its source thread. Its output
+contained the requested title and tool nonce without the earlier false
+messaging warning. This verifies that turn path, not the unrun multi-human
+allowlist or grant-expiry scenarios. It needs the same owner grant,
+relay/channel authorization, service-binding review, and task-lifecycle
+validation as the Buildpack path.
 
 `agents.NAME.model` can select that runtime's tool-capable model. If omitted,
 the agent uses the deployment's configured model. The bound Buzz MCP service
