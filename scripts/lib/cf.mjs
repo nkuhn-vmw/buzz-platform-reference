@@ -36,7 +36,7 @@ export function verifyLocalTarget(deployment, cfHome = cfHomeFor(deployment)) {
   return { cfHome, configPath, organizationGuid, spaceGuid };
 }
 
-const restricted = new Set(['api', 'auth', 'login', 'target', 'logout']);
+const restricted = new Set(['api', 'auth', 'login', 'target', 'logout', 'l', 't', 'lo']);
 export function restrictedCFCommand(args) {
   let commandIndex = 0;
   let contextOverride = false;

@@ -78,7 +78,7 @@
   <text class="body" x="1046" y="725">CF instance identity client certificate</text>
   <text class="small" x="1046" y="756">Checks expected identity app GUID</text>
 
-  <path class="teal" d="M480 696 H1006"/>
+  <path class="teal" d="M1006 696 H480"/>
   <text class="label" x="590" y="678">8 · key fetch over pinned CF app identity</text>
   <path class="teal" d="M480 755 H1006"/>
   <text class="label" x="606" y="779">JWKS response · public keys only</text>

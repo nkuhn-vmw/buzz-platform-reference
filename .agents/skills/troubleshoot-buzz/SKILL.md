@@ -12,7 +12,7 @@ Read `docs/troubleshooting.md` and inspect the relevant source path before propo
 1. Check `node scripts/cf.mjs --verify-target` and `node scripts/deploy.mjs status`.
 2. Inspect relevant services, tasks, events, and sanitized recent logs with commands listed in `docs/troubleshooting.md`.
 3. Trace the failing path in order: user/channel authorization, owner grant, worker task and lease, ACP bridge, native agent endpoint, model binding, Gateway binding, read-only MCP backend, relay reply route.
-   The current pilot has an approved/applied TLS-enabled PostgreSQL plan, but its fresh worker database is still being provisioned and bound. Check service readiness, TLS certificate binding, and direct-connection support before retrying activation.
+   The current pilot has an approved/applied TLS-enabled PostgreSQL plan and a provisioned worker database. Check its CF binding, app staging, TLS certificate, and direct-connection support before retrying activation.
 4. Compare service names and configuration with the rendered manifest and source. Do not print or copy `.state/`, `.credentials/`, VCAP bindings, or environment secrets.
 5. Recommend the smallest reversible repair. Before a retry, determine whether the prior service broker operation or CF Task is still active.
 6. Recheck the affected user flow and document the result, including any validation that remains unavailable.

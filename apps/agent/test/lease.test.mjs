@@ -4,7 +4,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSy
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { advisoryKey, databaseConfig, validateGrant } from '../lease-config.mjs';
+import { advisoryKey, databaseConfig, validateGrant, validateIdentityServiceName } from '../lease-config.mjs';
 import { acquireLease } from '../lease.mjs';
 
 test('grant validation fails closed for absent, malformed, and expired grants', () => {
@@ -13,6 +13,15 @@ test('grant validation fails closed for absent, malformed, and expired grants', 
   assert.throws(() => validateGrant('a'.repeat(64), 'not-a-date'), /expired/);
   assert.throws(() => validateGrant('a'.repeat(64), new Date(1000).toISOString(), 1000), /expired/);
   assert.equal(validateGrant('a'.repeat(64), new Date(2000).toISOString(), 1000), 2000);
+});
+
+test('identity binding service names follow the activated agent-name grammar', () => {
+  assert.equal(validateIdentityServiceName(), 'buzz-agent-identity');
+  assert.equal(validateIdentityServiceName('buzz-agent-identity-1research'), 'buzz-agent-identity-1research');
+  assert.equal(validateIdentityServiceName('buzz-agent-identity-research_team'), 'buzz-agent-identity-research_team');
+  assert.equal(validateIdentityServiceName('buzz-agent-identity-a_b-3'), 'buzz-agent-identity-a_b-3');
+  assert.throws(() => validateIdentityServiceName('buzz-agent-identity-Upper'), /Invalid BUZZ_IDENTITY_SERVICE/);
+  assert.throws(() => validateIdentityServiceName('buzz-agent-identity-'), /Invalid BUZZ_IDENTITY_SERVICE/);
 });
 
 test('advisory lock identity is stable and rejects malformed owners', () => {

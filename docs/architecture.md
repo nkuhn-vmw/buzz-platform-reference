@@ -32,6 +32,21 @@ an authenticated Buildpack user session exists, but the Buzz ACP-to-`/api/chat`
 path does not establish that session. Per-user Credential Store delegation is
 optional and is not implemented end to end.
 
+## Cloud Foundry apps, buildpacks, or a tile?
+
+Deploy Buzz's identity adapter, relay, and read-only tool backend as ordinary
+Cloud Foundry apps, and run each hosted agent as a CF Task. The Node services
+use the existing Node.js buildpack; the separate model-facing app uses the
+existing Tanzu Agent Buildpack. PostgreSQL, Redis/Valkey, object storage, SSO,
+AI models, MCP Gateway, Credential Store, and CredHub are consumed through the
+foundation's Marketplace service brokers.
+
+This reference does not add a custom Buzz tile or a general Buzz buildpack.
+App manifests already express the routes, bindings, network policy, runtime
+configuration, and task lifecycle needed here. A dedicated tile is a later
+productization choice only if Buzz becomes a foundation-wide operator-managed
+service with a stable service lifecycle and support contract.
+
 ## Human sign-in and relay identity
 
 ![Human OIDC sign-in and relay identity flow](assets/identity-flow.svg)
@@ -59,9 +74,16 @@ An owner-authorized identity binding supplies the agent key, owner key, grant,
 and grant deadline to the CF Task. The task refuses expired grants, acquires a
 dedicated PostgreSQL advisory lease for the agent, and starts the Buzz ACP
 supervisor only while it holds that lease. Lease heartbeat loss or grant
-expiry stops the child process; the task first requests graceful termination,
-then kills the process group after its bounded grace period. The task releases
-the lease only after the child exits.
+expiry stops the child process. Lease loss requests graceful termination,
+then kills the process group after two seconds; at the grant deadline it kills
+the group immediately. The task releases the lease only after the child group
+exits.
+
+This is best-effort duplicate suppression, not partition fencing or an
+exactly-once execution guarantee. A stalled process can retain its lease and
+require operator task cancellation. The reference's read-only tool avoids
+irreversible external writes; adding write-capable tools requires their own
+idempotency and authorization controls.
 
 The task strips its worker-database connection, full CF binding document, and
 PostgreSQL connection variables from the ACP child's environment. The child

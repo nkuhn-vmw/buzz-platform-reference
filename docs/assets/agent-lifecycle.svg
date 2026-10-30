@@ -57,7 +57,6 @@
   <text class="head" x="532" y="505">Supervisor holds the DB session</text>
   <text class="body" x="532" y="536">Heartbeat every 3 s · 10 s failure bound</text>
   <path class="line" d="M447 518 H498"/>
-  <text class="small" x="452" y="501">child only</text>
 
   <rect x="970" y="404" width="474" height="196" rx="18" fill="#201725" stroke="#6b3542" stroke-width="2"/>
   <text class="sub" x="996" y="442">STOP CONDITIONS</text>
@@ -94,5 +93,5 @@
   <text class="body" x="324" y="866">Local workspace files · model session · ACP child process</text>
   <text class="small" x="82" y="895">Discarded at task exit; restart does not restore thread context from this local state.</text>
   <text class="small" x="56" y="948">Environment filtering is minimization, not isolation: same-UID processes can inspect parent /proc state. CF app identity is the boundary.</text>
-  <text class="small" x="56" y="970">Lease mechanics are implemented; worker database provisioning, binding, and live task behavior remain unverified.</text>
+  <a href="../tmm-validation.md" aria-label="Current worker deployment evidence in the validation guide"><text class="small" x="56" y="970" fill="#4dd8e5" text-decoration="underline">Current worker deployment evidence: see the validation guide →</text></a>
 </svg>

@@ -23,7 +23,7 @@ The deployment uses platform service bindings for persistence, identity, model a
 
 ## Validation status
 
-This source tree is a pilot reference. In a private pilot, operator and desktop SSO, channel message persistence, and a native ACP/model/Gateway read-only tool probe have succeeded. A TLS-enabled PostgreSQL plan was approved and applied; the fresh worker database is still being provisioned, so the hosted worker and multi-human allowlist behavior are not yet verified. The [validation guide](docs/tmm-validation.md) separates these results from the remaining acceptance checks. Screenshots show two real desktop setup screens, not proof of a public service.
+This source tree is a pilot reference. In a private pilot, operator and desktop SSO, channel message persistence, and a native ACP/model/Gateway read-only tool probe have succeeded. A TLS-enabled PostgreSQL plan was approved and applied, and the fresh worker database has been provisioned; binding, staging, and TLS connectivity checks remain, so hosted worker and multi-human allowlist behavior are not yet verified. The [validation guide](docs/tmm-validation.md) separates these results from the remaining acceptance checks. Screenshots show two real desktop setup screens, not proof of a public service.
 
 ## Start here
 

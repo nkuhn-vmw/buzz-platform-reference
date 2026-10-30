@@ -95,7 +95,7 @@ try {
     BUZZ_DESKTOP_PROFILE: config.desktop.profile,
   };
   run('pnpm', ['install', '--frozen-lockfile'], desktop);
-  run('cargo', ['build', '--release', '-p', 'buzz-acp', '-p', 'buzz-agent', '-p', 'buzz-backend-kubernetes', '-p', 'buzz-dev-mcp', '-p', 'buzz-cli', '-p', 'git-credential-nostr'], stagedSource, childEnv);
+  run('cargo', ['build', '--locked', '--release', '-p', 'buzz-acp', '-p', 'buzz-agent', '-p', 'buzz-backend-kubernetes', '-p', 'buzz-dev-mcp', '-p', 'buzz-cli', '-p', 'git-credential-nostr'], stagedSource, childEnv);
   const host = execFileSync('rustc', ['-vV'], { encoding: 'utf8' }).match(/^host: (.+)$/m)?.[1];
   if (!host) throw new Error('Could not determine the native Rust target triple');
   const sidecarDir = path.join(stagedSource, 'desktop/src-tauri/binaries');

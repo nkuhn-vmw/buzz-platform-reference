@@ -30,9 +30,10 @@ its security boundary; verify deployed bindings and effective server
 configuration.
 
 In the current private pilot, the direct native ACP → model → Gateway
-read-only-tool probe passed with its expected nonce. The CF worker is still
-inactive pending a TLS-enabled PostgreSQL service plan, so this does not yet
-verify relay-triggered agent turns or thread reply publication.
+read-only-tool probe passed with its expected nonce. The TLS-enabled worker DB
+has been provisioned, but binding, app staging, and TLS connectivity checks
+remain. The worker is not active, so this does not yet verify relay-triggered
+agent turns or thread reply publication.
 
 Model selection is explicit. The launcher resolves a named `ai-models` service
 binding and model ID; it fails when the binding is missing/ambiguous or the
@@ -83,9 +84,10 @@ The worker must stop when it loses its lease, and duplicate tasks must not
 process the same agent concurrently.
 
 The current private pilot has not activated its worker. A TLS-enabled
-PostgreSQL plan is approved and applied, and the fresh worker database is being
-provisioned and bound. The lease, restart behavior, and hosted worker must not
-be described as verified live until those checks pass.
+PostgreSQL plan is approved and applied and the fresh worker database is
+provisioned; binding, app staging, and TLS connectivity checks remain. The
+lease, restart behavior, and hosted worker must not be described as verified
+live until those checks pass.
 
 ## Built-in Buzz runtime
 

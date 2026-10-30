@@ -55,7 +55,7 @@ test('CF command is not launched when the isolated local target is wrong', () =>
 });
 
 test('CF wrapper blocks commands and flags that can change authentication or target context', () => {
-  for (const command of ['api', 'auth', 'login', 'target', 'logout']) assert.equal(restrictedCFCommand([command]), true);
+  for (const command of ['api', 'auth', 'login', 'target', 'logout', 'l', 't', 'lo']) assert.equal(restrictedCFCommand([command]), true);
   for (const flags of [['-a', 'https://other.example', 'push'], ['--org', 'other-org', 'push'], ['--space', 'other-space', 'push']]) assert.equal(restrictedCFCommand(flags), true);
   assert.equal(restrictedCFCommand(['push', '--strategy', 'rolling']), false);
   assert.equal(restrictedCFCommand(['push', '-s', 'cflinuxfs4']), false);

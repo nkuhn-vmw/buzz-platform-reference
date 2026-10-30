@@ -22,6 +22,13 @@ export function validateGrant(owner, expiresAt, now = Date.now()) {
   if (!Number.isFinite(deadline) || deadline <= now) throw new Error('Owner grant expired; renew through SSO');
   return deadline;
 }
+
+export function validateIdentityServiceName(name = 'buzz-agent-identity') {
+  if (typeof name !== 'string' || !/^buzz-agent-identity(?:-[a-z0-9][a-z0-9_-]{0,31})?$/.test(name)) {
+    throw new Error('Invalid BUZZ_IDENTITY_SERVICE name');
+  }
+  return name;
+}
 export function databaseConfig(credentials, caPath = process.env.CF_SYSTEM_CERT_PATH) {
   if (!credentials || typeof credentials !== 'object') throw new Error('Invalid buzz-agent-db binding');
   const uriText = credentials.uri || credentials.jdbcUrl?.replace(/^jdbc:/, '') || credentials.url;

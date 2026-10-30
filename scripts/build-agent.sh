@@ -19,14 +19,25 @@ if git -C "$source_dir" apply --check "$patch"; then
   git -C "$source_dir" apply "$patch"
 else
   git -C "$source_dir" apply --reverse --check "$patch" || { echo 'Agent patch mismatch; use a fresh checkout' >&2; exit 1; }
-  # Refuse unrelated tracked or untracked changes on a repeat build.
-  expected=$(mktemp)
-  actual=$(mktemp)
-  trap 'rm -f "$expected" "$actual"' EXIT
-  git -C "$source_dir" apply --numstat "$patch" | cut -f3 | sort > "$expected"
-  git -C "$source_dir" diff --name-only | sort > "$actual"
-  cmp -s "$expected" "$actual" || { echo 'Unexpected changes in agent checkout' >&2; exit 1; }
-  [[ -z "$(git -C "$source_dir" ls-files --others --exclude-standard)" ]] || { echo 'Unexpected untracked agent files' >&2; exit 1; }
+  # Compare the checkout to the exact pinned source plus this patch. Temporarily
+  # reverse only the known patch, inspect cleanliness, then restore it on every
+  # exit path. This catches extra edits in files touched by the patch too.
+  restore_patch=0
+  restore_applied_patch() {
+    if [[ "$restore_patch" == 1 ]]; then
+      git -C "$source_dir" apply --check "$patch" && git -C "$source_dir" apply "$patch" || {
+        echo 'Could not restore the agent patch after repeat-build validation' >&2
+        return 1
+      }
+      restore_patch=0
+    fi
+  }
+  trap restore_applied_patch EXIT
+  git -C "$source_dir" apply --reverse "$patch"
+  restore_patch=1
+  [[ -z "$(git -C "$source_dir" status --porcelain)" ]] || { echo 'Unexpected changes in agent checkout beyond the pinned patch' >&2; exit 1; }
+  restore_applied_patch
+  trap - EXIT
 fi
 docker run --rm --platform linux/amd64 \
   -v "$source_dir:/workspace" -v "$target_dir:/target" \

@@ -20,7 +20,7 @@
   <text class="heading" x="72" y="228">Local desktop</text>
   <text class="body" x="72" y="260">Buzz identity + client key</text>
   <text class="body" x="72" y="287">OS credential store</text>
-  <text class="small" x="72" y="320">System browser · loopback callback</text>
+  <text class="small" x="72" y="320">Browser · local callback</text>
 
   <rect class="panel identity" x="390" y="190" width="322" height="184" rx="18"/>
   <text class="heading" x="416" y="229">Identity adapter</text>

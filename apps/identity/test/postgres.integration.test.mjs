@@ -75,7 +75,7 @@ test('PostgreSQL preserves single-use codes, fixed sessions, and revoked owner g
     const publicJwk = { ...pair.publicKey.export({ format: 'jwk' }), alg: 'ES256', use: 'sig', kid: 'pg-integration-key' };
     const signingKey = await importJWK(privateJwk, 'ES256');
     const app = createIdentityApp({ config: {
-      publicBase: 'https://identity.example', issuer: 'https://identity.example', relays: new Set(['wss://relay.example']), allowedEmails: new Set(['pilot@example.org']),
+      publicBase: 'https://identity.example', issuer: 'https://identity.example', relays: new Set(['wss://relay.example']), allowedEmails: new Set(['pilot@example.org', 'operator@example.org']),
       sessionTtlSeconds: 3600, alg: 'ES256', kid: 'pg-integration-key', signingKey, publicJwk,
     }, pool, oidc: {} });
     try {

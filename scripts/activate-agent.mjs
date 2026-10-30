@@ -104,10 +104,16 @@ export function configureAgentManifest(template, { deployment, agent, identitySe
   }
   return { app, appName, identityService, runtime, ownerPubkey };
 }
-function apiJson(deployment, path) {
-  const text = cf(deployment, ['curl', path], { capture: true });
-  try { return JSON.parse(text); }
+function apiJson(deployment, path, method, body) {
+  const args = ['curl', path];
+  if (method) args.push('-X', method);
+  if (body) args.push('-d', JSON.stringify(body));
+  const text = cf(deployment, args, { capture: true });
+  let data;
+  try { data = JSON.parse(text); }
   catch { throw new Error(`CF API returned invalid JSON for ${path.split('?')[0]}`); }
+  if (data.errors) throw new Error(`CF API request failed: ${data.errors.map(error => error.code).join(', ')}`);
+  return data;
 }
 function verifySpace(deployment) {
   const target = verifyLocalTarget(deployment);
@@ -206,13 +212,13 @@ function ensureNativePolicy(deployment, appName, spaceGuid) {
   const hasPolicy = hasNativeC2CPolicy(result.stdout, appName, deployment.space, deployment.org);
   if (!hasPolicy) cf(deployment, ['add-network-policy', appName, 'buzz-platform-agent', '--protocol', 'tcp', '--port', '8080']);
 }
-function waitForStartedTask(deployment, appGuid, taskName) {
+function waitForStartedTask(deployment, taskGuid, taskName) {
   const until = Date.now() + 15_000;
   while (Date.now() < until) {
-    const tasks = appTasks(deployment, appGuid);
-    const task = tasks.find((item) => item.name === taskName);
+    const task = apiJson(deployment, `/v3/tasks/${encodeURIComponent(taskGuid)}`);
+    if (task.guid !== taskGuid || task.name !== taskName) throw new Error('CF returned a different task than the one just created');
     if (task && ['PENDING', 'RUNNING'].includes(String(task.state).toUpperCase())) return task;
-    if (task && String(task.state).toUpperCase() === 'FAILED') throw new Error(`CF Task ${taskName} failed to start; inspect sanitized task logs`);
+    if (task && ['FAILED', 'SUCCEEDED', 'CANCELING'].includes(String(task.state).toUpperCase())) throw new Error(`CF Task ${taskName} exited or stopped during activation; inspect sanitized task logs`);
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
   }
   throw new Error(`CF Task ${taskName} was not visible after it was requested; inspect app tasks before retrying`);
@@ -247,10 +253,11 @@ export function activate(args = process.argv.slice(2)) {
   if (configured.runtime === 'tanzu') ensureNativePolicy(deployment, appName, target.spaceGuid);
 
   const taskName = `agent-${agent}`;
-  const taskArgs = ['run-task', appName, '-c', 'node launch.mjs', '--name', taskName];
-  const run = runCF(taskArgs, { deployment, capture: true });
-  if (run.status !== 0) throw new Error(`Could not start CF Task ${taskName} (cf exited ${run.status})`);
-  waitForStartedTask(deployment, pushedApp.guid, taskName);
+  const task = apiJson(deployment, `/v3/apps/${encodeURIComponent(pushedApp.guid)}/tasks`, 'POST', {
+    name: taskName, command: 'node launch.mjs', memory_in_mb: 1024, disk_in_mb: 2048,
+  });
+  if (typeof task.guid !== 'string' || !/^[a-f0-9-]{36}$/i.test(task.guid)) throw new Error('CF did not return the created task identity; inspect existing tasks before retrying');
+  waitForStartedTask(deployment, task.guid, taskName);
   console.log(`Activated ${configured.appName} (${configured.runtime}) as CF Task ${taskName}; identity grant expires ${local.expiresAt}.`);
   return { appName, taskName, identityService: serviceName, expiresAt: local.expiresAt };
 }
