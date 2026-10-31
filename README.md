@@ -26,7 +26,7 @@ The deployment uses platform service bindings for persistence, identity, model a
 
 The private pilot has verified real SSO, desktop conversations, both hosted runtimes, two-user shared-agent threads, private-channel isolation, owner-only denial, and participant logout. Worker PostgreSQL verified TLS 1.3 and its certificate; duplicate-task, restart/context, and configured-deadline checks also passed. The separate native SSO companion verified distinct A/B Credential Store receipts and deletion isolation through MCP Gateway.
 
-Per-user delegation **inside Buzz** is not implemented; the companion demonstrates that capability through the native Agent Buildpack UI. Signed/notarized attendee distribution remains pending. See the [validation guide](docs/tmm-validation.md) for the exact evidence and the email-based identity mapping used by the synthetic companion. These results do not establish production readiness or a public hosted service.
+Per-user delegation **inside Buzz** is not implemented; the companion demonstrates it through the native Agent Buildpack UI under the foundation's email-based mapping for two synthetic test accounts. That is not issuer/subject isolation, and production trust-policy approval remains open. Signed/notarized attendee distribution remains pending. See the [validation guide](docs/tmm-validation.md) for the exact evidence. These results do not establish production readiness or a public hosted service.
 
 ## Start here
 
@@ -43,7 +43,7 @@ Per-user delegation **inside Buzz** is not implemented; the companion demonstrat
 
 ## Screenshots
 
-The [getting-started guide](docs/getting-started.md) includes authentic desktop screenshots of sign-in, private channel creation, channel membership, and a live hosted-agent reply.
+The [getting-started guide](docs/getting-started.md) includes authentic desktop screenshots of sign-in, private channel creation, channel membership, and owner/shared-agent replies. The [native companion guide](docs/credential-companion.md#read-the-live-result) shows an actual credential receipt and post-deletion denial.
 
 [![A real desktop conversation with the hosted Platform Helper](docs/assets/agent-thread.jpg)](docs/getting-started.md#hosted-agent-reply)
 

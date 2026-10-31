@@ -40,6 +40,17 @@ Both real participants authenticated through independent foundation CF SSO sessi
 
 The deployed Store resolves across issuers by email with origin matching disabled. These results do **not** establish issuer/subject isolation. Both users' bearer-authenticated debug-list requests returned 401; separately, the deployed settings resolved `debug_endpoints_enabled=False`. No debug configuration was changed. Native companion code at `9a919309` received independent `claude-opus-5-5` review; [all nine PR CI jobs passed](https://github.com/nkuhn-vmw/buzz-platform-reference/actions/runs/41229093968). The exported public source scan found no secrets. The synthetic A/B credential exercise passed within this documented identity mapping; OAuth refresh/expiry and production trust policy are outside that result.
 
+The participant management helper was also exercised live: it refused a wrong
+account before making service requests, inspected A's entry, deleted and restored
+that entry using A's own session, and left B's entry and usage unchanged. Its
+focused regression checks refusal of a mismatched CF target or account without
+printing the access token. This is management-path evidence; the native tool
+sequence above separately establishes credential use.
+
+SpaceAuditor can read logs, events, and app status/settings across the synthetic
+space. The HTTP 403 environment check above does not establish log isolation.
+Keep that space's content and logs appropriate for all approved participants.
+
 ## Remaining validation
 
 - The second user's Buzz checks used an independently authenticated signed HTTP client. A second desktop installation and UX are unverified.

@@ -14,6 +14,10 @@ approved distribution route. Follow the operator's release link and
 organization sign-in instructions; never put a relay secret or an agent key in
 the client configuration.
 
+The reference pilot's signed attendee build is still pending. Follow these steps
+after your operator provides that distribution; the local facilitator build is
+not an attendee installation path.
+
 After installing the signed client:
 
 1. Open Buzz and connect to the community address provided by your operator.

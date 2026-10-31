@@ -2,6 +2,10 @@
 
 This is the team-member guide for a Buzz community that an operator has already deployed and distributed. Ask your operator for the signed client distribution, community address, organization sign-in instructions, project channel, and approved agent names. This repository does not host a community or provide public account registration.
 
+The reference pilot does not yet have a signed attendee build. These attendee
+installation steps begin only after your operator supplies an approved signed
+distribution; the current local facilitator build is not that installer.
+
 ## Join a project conversation
 
 1. Install the Buzz app supplied by your organization and open Settings → Profile.

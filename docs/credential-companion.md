@@ -35,6 +35,12 @@ The companion uses one instance. Restart rotates its gate cookie key and require
 
 Use a separate CF space containing only synthetic workshop resources. Application SSO admission does not authorize CF role grants. Confirm the least role needed for each attendee's own Credential Store management; do not grant SpaceDeveloper merely to make the screen appear. SpaceDeveloper can read bindings and change apps. Inspection of the deployed reference service confirmed that `SpaceAuditor` is accepted for managing one’s own credentials; store-scoped writes require `SpaceManager`. Both approved participants successfully saved their own entries with only SpaceAuditor in this space and the required OrgUser membership. Obtain explicit approval before adding those roles. See [CF role permissions](https://docs.cloudfoundry.org/concepts/roles.html).
 
+SpaceAuditor also permits reading app logs, usage events, and app status/settings
+throughout that space. The environment-read denial does not make logs private
+between attendees. Keep all apps and logs in this space limited to synthetic
+data and identifiers every participant is authorized to see; never log tokens
+or confidential conversation content. See the same [official role table](https://docs.cloudfoundry.org/concepts/roles.html).
+
 Create a private deployment configuration using the [installation guide](install.md), with a dedicated `space`, `routePrefix`, `cfHome`, `stateDir`, and `credentialsDir`. Keep the two exact approved emails in `allowedEmails`. Point `BUZZ_DEPLOYMENT_CONFIG` to that file for **every** command below; the CF wrapper refuses an API/org/space mismatch. Authenticate its isolated CF home normally; never copy a token file from another context.
 
 Create these services using plans available in your marketplace:
@@ -88,6 +94,10 @@ model: YOUR_MODEL_NAME
 allowed-emails: attendee-a@example.invalid,attendee-b@example.invalid
 sso-provider: YOUR_CONFIGURED_IDENTITY_PROVIDER
 ```
+
+`allowedEmails` in the deployment JSON configures Buzz identity admission.
+`allowed-emails` in this vars file populates the companion's `APP_ALLOWED_EMAILS`
+environment variable. They are separate allowlists; configure both deliberately.
 
 Deploy the backend, bind it to the Gateway using the SSO service, and wait for the asynchronous binding to succeed before restaging:
 
@@ -157,11 +167,72 @@ The store ID is the service-instance GUID. The resource name is **`buzz-workshop
 
 Keep the bearer token and management access token out of prompts, shell arguments, logs, screenshots and source control. Use private input or an approved secrets workflow. The Gateway-to-Store `/v1/resolve` endpoint is an internal mTLS contract; do not call it as an agent-side SDK.
 
-A prior native rehearsal found that Hub inferred OAuth for this OIDC Gateway even though the backend needs a static bearer credential. Its static-save API worked, but that does not establish vendor support policy for API-based creation. If Hub will not offer the static type, record the limitation and confirm the approved management workflow. Do not switch off Gateway authentication or move the secret into the descriptor.
+A prior native rehearsal found that Tanzu Hub inferred OAuth for this OIDC Gateway even though the backend needs a static bearer credential. Its static-save API worked, but that does not establish vendor support policy for API-based creation. If Hub will not offer the static type, record the limitation and confirm the approved management workflow. Do not switch off Gateway authentication or move the secret into the descriptor.
+
+## Participant management commands
+
+Use Node.js 24 and the cf CLI on the participant's workstation. The operator
+provides the exact API/org/space, Store GUID, Store dashboard origin, and only
+that participant's disposable token. Transfer A's token only to A and B's only
+to B using the organization's approved private secret-transfer channel. Do not
+distribute the combined backend key file or an administrator's CF session.
+
+Sign in to a new isolated CF home as the participant. Replace the example
+target; follow the passcode URL printed by `cf login --sso`:
+
+```sh
+umask 077
+mkdir -p .credentials/workshop-participant/cf-home
+export CF_HOME="$PWD/.credentials/workshop-participant/cf-home"
+cf login --sso -a https://api.example.invalid -o workshop-org -s workshop-delegation
+cf target
+```
+
+Save the privately received token in `.credentials/workshop-participant/token.json`
+using a local editor, never a prompt or a shell argument. The file contains
+only `{"token":"THE_PARTICIPANTS_SYNTHETIC_TOKEN"}`. Set mode 600. Then create
+`.credentials/workshop-participant/manage.json`, replacing every example and
+using absolute filesystem paths:
+
+```json
+{
+  "api": "https://api.example.invalid",
+  "org": "workshop-org",
+  "space": "workshop-delegation",
+  "cfHome": "/ABSOLUTE/PATH/.credentials/workshop-participant/cf-home",
+  "email": "attendee-a@example.invalid",
+  "storeOrigin": "https://credential-store.example.invalid",
+  "storeId": "11111111-1111-4111-8111-111111111111",
+  "tokenFile": "/ABSOLUTE/PATH/.credentials/workshop-participant/token.json"
+}
+```
+
+The operator can obtain the Store GUID using `node scripts/cf.mjs service
+buzz-workshop-credentials --guid` in the companion context and the dashboard
+origin from `node scripts/cf.mjs service buzz-workshop-credentials`. Participants
+must use their own `cfHome` and exact account email in the management file.
+
+```sh
+chmod 600 .credentials/workshop-participant/token.json
+node scripts/workshop-credential.mjs inspect .credentials/workshop-participant/manage.json
+node scripts/workshop-credential.mjs save .credentials/workshop-participant/manage.json
+# During the deletion phase, as that same user:
+node scripts/workshop-credential.mjs delete .credentials/workshop-participant/manage.json
+```
+
+The helper checks the exact CF target and account, verifies that the Store
+belongs to the space and its dashboard matches the configured origin, and uses
+only `scope: user` for the fixed synthetic resource. It refuses to overwrite an
+entry or proceed with shared fallback. It reads the token from the private file
+only when saving and prints status metadata, never credentials. If the CF
+session expires, sign in again to the same isolated home. A 404 can indicate
+missing space access; resolve the approved role rather than substituting an
+administrator's token. `save` after `delete` restores the disposable entry for
+another rehearsal.
 
 ## Rehearse the isolation and deletion sequence
 
-Use a new conversation for each step. Ask: **“Call workshop_credential_receipt now and report its actual principal label and nonce. If the tool fails, report the failure.”** Read the actual tool result, then match its nonce in the backend log. Model prose alone is insufficient. Require a successful A receipt on this exact deployment before interpreting any denied call. That positive control establishes path rewriting, backend reachability and permission to call the MCP tool.
+Use a new conversation for each step. Ask: **“Call workshop_credential_receipt now. Report the actual principal label and nonce from the tool. If it fails, report the failure.”** Read the actual tool result, then match its nonce in the backend log. Model prose alone is insufficient. Require a successful A receipt on this exact deployment before interpreting any denied call. That positive control establishes path rewriting, backend reachability and permission to call the MCP tool.
 
 For every denial, record the actual Gateway/Store cause. Only a missing credential for the intended authenticated user counts as the expected denial. Stale native identity, tool-permission refusal, OIDC failure, timeout or an unreachable backend is **inconclusive**. Resolve that cause and repeat the affected step; never count generic connection failure as isolation.
 

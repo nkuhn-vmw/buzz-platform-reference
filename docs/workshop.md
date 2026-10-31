@@ -11,9 +11,9 @@ client with real SSO. Track the exact limits in the [validation guide](tmm-valid
 | Segment | Demonstration | What to explain |
 | --- | --- | --- |
 | 5 minutes | Open the operator's Buzz desktop and project channel. | Local desktop, hosted relay, and independent human identities. |
-| 10 minutes | Mention Workshop Helper; have the approved second user follow up in the same thread, then start a new one. | Channel membership, explicit agent selection, shared thread context, and separate topics. |
+| 10 minutes | Mention Workshop Helper; after signed attendee distribution is available, have the approved second user follow up and start a new thread. Until then, show the recorded two-user rehearsal in the operator's desktop. | Channel membership, explicit agent selection, shared thread context, and separate topics. |
 | 5 minutes | Contrast the shared helper with an existing owner-only agent and the private channel. | Reading a conversation does not grant permission to invoke an agent or access another channel. |
-| 10 minutes | Open the native companion in two browser profiles; show A/B receipts, remove A's entry, and call again as both users. | Credential Store selects each user's credential; B remains unaffected. This flow is separate from Buzz. |
+| 10 minutes | Open the native companion in two browser profiles; show A/B receipts, remove A's entry, and call again as both users. | The tested foundation selects credentials by email across issuers. Use synthetic tokens only; this is separate from Buzz and is not subject isolation. |
 | 5 minutes | Show the CF apps, tasks, bindings, and the recorded receipts. | Platform services and scoped access, plus the limits that still require production decisions. |
 
 Complete enrollment and sign-in before presenting. Keep grant expiry beyond
@@ -27,15 +27,49 @@ The facilitator needs an operator-deployed community, two approved SSO accounts,
 
 Provide attendees with the approved desktop download, community address, SSO instructions, project channel, and agent names through the organization's private distribution channel. The current pilot macOS artifact is unsigned and unnotarized. Resolve distribution with the organization's macOS administrator before a broad workshop; do not ask participants to disable Gatekeeper. Installation and first-use screenshots are in [Getting started](getting-started.md).
 
+There is no signed attendee download for this pilot yet. The existing
+facilitator desktop is a local pilot build; it is not an attendee installer.
+The second-desktop segment waits for an approved signed build and installation
+check. This guide does not authorize an unsigned-app exception such as
+**Open Anyway** or removing quarantine metadata. The recorded second-user
+rehearsal used an operator-run signed HTTP client and can be shown from the
+operator's desktop; it is not a public attendee client.
+
+For the native credential segment, provide each participant with their own
+approved foundation account, the cf CLI, OrgUser plus SpaceAuditor only in the
+synthetic companion space, the Store GUID/origin, and the participant management
+configuration described in [the companion guide](credential-companion.md#participant-management-commands).
+Add each approved email to the companion's `allowed-emails` as well as the Buzz
+identity allowlist. Deliver only that participant's disposable token through
+your approved private secret-transfer channel. Never send the combined backend
+key file. SpaceAuditor includes app-log access throughout the space; use only
+content and identifiers every workshop participant is authorized to see.
+
 Check the exact API, org, and space, then inspect the deployed processes and tasks:
 
 ```sh
 node scripts/deploy.mjs status
 node scripts/cf.mjs tasks buzz-agent
 node scripts/cf.mjs tasks buzz-agent-researcher
+node scripts/cf.mjs tasks buzz-agent-workshop-helper
 ```
 
 The worker apps intentionally have no running web process; their active CF Tasks must be `RUNNING`. Check each private enrollment's `expires_at` against the whole workshop duration. Renew enrollment and reactivate before the session if necessary. Do not print grant tokens or start a duplicate task. Agent activation requires stopping the exact existing task first; see [agent operation](agents.md).
+
+Print only grant expiries from the configured private enrollment records:
+
+```sh
+node --input-type=module <<'JS'
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { loadDeployment } from './scripts/lib/config.mjs';
+const c = loadDeployment();
+for (const name of Object.keys(c.agents)) {
+  const e = JSON.parse(readFileSync(join(c.credentialsDir, 'agents', name, 'agent-enrollment.json')));
+  console.log(name, e.expires_at);
+}
+JS
+```
 
 ## Admit an ordinary participant
 
@@ -74,10 +108,16 @@ The shipped Buzz bridge sends text and a thread session ID to the installed nati
 
 The optional [native Credential Store companion](credential-companion.md) provides a separate synthetic exercise alongside Buzz. Its A-positive/B-missing-credential, both-configured, and A-delete/B-unaffected phases passed. Verify its Gateway/Store identity mapping and both browser identities before interpreting results. Do not bind user-scoped credentials to the existing Buzz runtime, whose internal chat endpoint uses application access.
 
+Those results hold for the two controlled accounts under the foundation's
+email-based cross-issuer mapping. Production trust-policy approval remains open;
+the result is not issuer/subject isolation. If your mapping is email-based,
+continue only with approved synthetic accounts/tokens and stop before connecting
+real credentials or personal datasets.
+
 For that separate acceptance exercise:
 
 1. Use a dedicated Credential Store and test resource, with the companion bound only to that store. Store two disposable test credentials that produce distinct non-secret receipts, `A` and `B`. The protected tool must never echo a credential.
-2. Verify the native agent issuer/subject and the Credential Store management issuer/subject. Foundation UAA and an app's SSO zone can differ. Same email is not proof of equal subjects. Determine the resolution tier actually used; any intentional cross-issuer claim mapping must have an approved trust policy. Never report an incidental email fallback as subject isolation.
+2. Verify the native agent issuer/subject and the Credential Store management issuer/subject. Foundation UAA and an app's SSO zone can differ. Same email is not proof of equal subjects. Determine the resolution tier actually used. Email-based mapping permits only this explicitly approved synthetic exercise; an approved production trust policy is required before real credentials or datasets are connected. Never report email fallback as subject isolation.
 3. Ensure no store-scoped credential exists for the resource and no other bound store can satisfy it. Explicitly inspect claim fallback configuration. Record only the relevant configuration and metadata, never credential values. Verify production debug endpoints cannot expose or delete other users' credentials.
 4. Confirm the least CF role needed to manage one's own credentials. Application SSO access does not authorize granting CF SpaceDeveloper; that role can expose app bindings. Resolve management access or isolate the workshop space before adding roles.
 5. Let each user save their own `scope: user` credential through the supported management flow. Do not use an administrator's token and relabel the resulting credential as another user.
@@ -104,3 +144,10 @@ node scripts/deploy.mjs remove-participant VERIFIED_BUZZ_PUBLIC_KEY_HEX
 ```
 
 This removes relay membership only. It does not revoke SSO, erase local history, or immediately invalidate already-issued assertions. Remove temporary SSO access using the same exact-email configuration path, stop temporary agent tasks by their task IDs, and delete only the disposable credentials created for this rehearsal. Preserve the working owner-only pilot.
+
+Also remove temporary companion emails from `allowed-emails`/`APP_ALLOWED_EMAILS`
+and restart the companion to end gate sessions. Revoke temporary SpaceAuditor
+roles and any OrgUser membership created solely for this workshop through the
+approved access-management process; preserve pre-existing roles. Follow the
+[credential cleanup steps](credential-companion.md#end-the-workshop) before
+stopping the synthetic apps.
