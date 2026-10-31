@@ -4,6 +4,13 @@ import { loadDeployment, root } from './lib/config.mjs';
 import { cf, verifyTarget } from './lib/cf.mjs';
 import { render, manifests } from './render.mjs';
 
+const step=process.argv[2];
+const participantSteps = new Set(['admit-participant', 'remove-participant']);
+if (participantSteps.has(step) && (process.argv.length !== 4 || !/^[a-f0-9]{64}$/.test(process.argv[3]))) {
+  console.error(`Usage: node scripts/deploy.mjs ${step} VERIFIED_BUZZ_PUBLIC_KEY_HEX`);
+  process.exit(1);
+}
+
 const c = loadDeployment();
 verifyTarget(c);
 const json = (path, method, body) => {
@@ -40,7 +47,6 @@ function push(name, file, path, extra=[]) {
   const directory=render(c);
   cf(c,['push',name,'-f',join(directory,`${file}.yml`),'-p',join(root,path),...extra]);
 }
-const step=process.argv[2];
 console.log(`Deployment target: ${c.api} / ${c.org} / ${c.space}`);
 try {
   if (step==='prepare-apps') {
@@ -94,5 +100,10 @@ try {
     const owner=JSON.parse(readFileSync(join(c.credentialsDir,'pilot-owner.json'),'utf8'));
     if (!/^[a-f0-9]{64}$/.test(owner.pubkey ?? '')) throw new Error('Enroll the dedicated pilot owner first');
     await task('buzz-relay',`node launch.mjs add-member --pubkey ${owner.pubkey} --role admin`,'admit-pilot-owner');
-  } else throw new Error('Usage: node scripts/deploy.mjs prepare-apps|identity|relay|tools|register-mcp|native-agent|worker|admit-owner|probe|status');
+  } else if (participantSteps.has(step)) {
+    const command = step==='admit-participant' ? 'add-member' : 'remove-member';
+    // Removal is role-filtered so an attendee cleanup cannot remove an admin.
+    await task('buzz-relay',`node launch.mjs ${command} --pubkey ${process.argv[3]} --role member`,step);
+    console.log('Participant membership task completed; confirm the roster and channel access separately.');
+  } else throw new Error('Usage: node scripts/deploy.mjs prepare-apps|identity|relay|tools|register-mcp|native-agent|worker|admit-owner|admit-participant KEY|remove-participant KEY|probe|status');
 } catch (error) {console.error(error.message);process.exitCode=1;}

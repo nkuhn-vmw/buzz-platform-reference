@@ -35,6 +35,7 @@ This source tree is a pilot reference. In a private pilot, operator/desktop SSO,
 - [Runtime choices and OpenCode assessment](docs/agent-runtimes.md)
 - [Architecture and trust boundaries](docs/architecture.md)
 - [Validation checklist](docs/tmm-validation.md)
+- [TMM workshop rehearsal and participant onboarding](docs/workshop.md)
 - [Troubleshooting](docs/troubleshooting.md)
 
 ## Screenshots
