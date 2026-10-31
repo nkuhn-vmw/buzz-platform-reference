@@ -2,7 +2,7 @@
 
 This optional application demonstrates the native Tanzu Agent Buildpack path alongside Buzz. Buzz's ACP bridge does **not** forward a user's platform identity to the native runtime. Keep the two demonstrations separate.
 
-The reference companion and protected MCP backend have been deployed on Cloud Foundry. Anonymous access checks and the backend's HTTP/MCP tests passed. The two-user credential save/use/delete exercise is **not yet accepted**. See [deployment validation](tmm-validation.md) for the recorded evidence.
+The reference companion and protected MCP backend are deployed on Cloud Foundry. Both real SSO accounts have authenticated independently. A live user A call returned receipt A; user B, with no saved credential, was denied by the Store without using A's credential. Both users have now saved their own entries. The remaining both-configured and deletion checks are **not yet accepted**. See [deployment validation](tmm-validation.md) for the recorded evidence.
 
 ```mermaid
 flowchart LR
@@ -21,7 +21,7 @@ flowchart LR
 
 The backend accepts two distinct random credentials and returns a non-secret `A` or `B` label plus a fresh nonce. It selects the label from the validated credential, never from the model's prompt or tool arguments. No real business system or personal dataset is connected.
 
-The tested foundation is configured to resolve across issuers by **email**, with matching identity-provider origins disabled. Foundation UAA and App SSO are separate identity namespaces. A successful test would demonstrate email-based credential resolution for the two controlled test accounts; it would not establish issuer/subject isolation or production suitability. An account in a trusted issuer with the same email may resolve the same credential. Verify provider ownership and email-verification policy before using this pattern.
+The tested foundation is configured to resolve across issuers by **email**, with matching identity-provider origins disabled. Foundation UAA and App SSO are separate identity namespaces. The observed success demonstrates email-based credential resolution for a controlled test account; it does not establish issuer/subject isolation or production suitability. An account in a trusted issuer with the same email may resolve the same credential. Verify provider ownership and email-verification policy before using this pattern.
 
 The exact-email proxy and native agent have separate SSO sessions. The proxy's allowlist does not enforce equality with the native session. Use separate browser profiles, verify **both** identities before each test, and stop if they differ. This is a documented test precondition, not an enforced native identity boundary. The gate rejects an explicitly unverified email; its upstream default permits an absent verification claim, so inspect actual provider behavior. Do not add an unverified-email override.
 
@@ -29,7 +29,7 @@ The companion uses one instance. Restart rotates its gate cookie key and require
 
 ## Deploy in a dedicated space
 
-Use a separate CF space containing only synthetic workshop resources. Application SSO admission does not authorize CF role grants. Confirm the least role needed for each attendee's own Credential Store management; do not grant SpaceDeveloper merely to make the screen appear. SpaceDeveloper can read bindings and change apps. Inspection of the deployed reference service confirmed that `SpaceAuditor` is accepted for managing one’s own credentials; store-scoped writes require `SpaceManager`. The two-user live exercise with these roles is still pending. Obtain explicit approval before adding the space role and required OrgUser membership. See [CF role permissions](https://docs.cloudfoundry.org/concepts/roles.html).
+Use a separate CF space containing only synthetic workshop resources. Application SSO admission does not authorize CF role grants. Confirm the least role needed for each attendee's own Credential Store management; do not grant SpaceDeveloper merely to make the screen appear. SpaceDeveloper can read bindings and change apps. Inspection of the deployed reference service confirmed that `SpaceAuditor` is accepted for managing one’s own credentials; store-scoped writes require `SpaceManager`. Both approved participants successfully saved their own entries with only SpaceAuditor in this space and the required OrgUser membership. Obtain explicit approval before adding those roles. See [CF role permissions](https://docs.cloudfoundry.org/concepts/roles.html).
 
 Create a private deployment configuration using the [installation guide](install.md), with a dedicated `space`, `routePrefix`, `cfHome`, `stateDir`, and `credentialsDir`. Keep the two exact approved emails in `allowedEmails`. Point `BUZZ_DEPLOYMENT_CONFIG` to that file for **every** command below; the CF wrapper refuses an API/org/space mismatch. Authenticate its isolated CF home normally; never copy a token file from another context.
 
@@ -120,7 +120,9 @@ Verify `/health` returns 200 and unauthenticated `/`, `/api/chat`, `/api/auth/st
 
 Each participant signs into the foundation's Credential Store management flow as themselves. Verify the management email and native App SSO email match exactly, and that neither session is the administrator's. Record the issuer/subject correspondence privately. Never relabel an operator-owned entry as a participant's.
 
-The reference deployment’s standalone Store UI sign-in was rejected by its identity provider because its UAA-host callback was not registered. The normal `cf login --sso` flow on the foundation’s login host successfully authenticated user A. Its subsequent Store metadata request returned 404 because A had no role in the workshop space. These are separate authentication and authorization checks. Do not loosen callback validation, use the administrator’s identity, or claim the standalone UI login passed.
+The reference deployment’s standalone Store UI sign-in was rejected by its identity provider because its UAA-host callback was not registered. The normal `cf login --sso` flow on the foundation’s login host successfully authenticated both users independently. Before the scoped role grant, Store metadata returned 404; after the approved SpaceAuditor grants, each user's own bearer token could read their metadata and save their user-scoped entry. These are separate authentication and authorization checks. Do not loosen callback validation, use the administrator’s identity, or claim the standalone UI login passed.
+
+Use a separate browser profile for each account. An existing corporate session in one Chrome profile does not sign a different profile into App SSO. Verify the exact-email gate identity and the native agent's displayed identity independently before the tool call. The reference rehearsal checked both identities for A and B.
 
 Use the deployed service's OpenAPI contract. The reference contract exposes:
 

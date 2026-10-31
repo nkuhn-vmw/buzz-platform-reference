@@ -1,6 +1,6 @@
 # TMM workshop facilitator guide
 
-This is the rehearsal procedure for a private deployment, not a claim of completed workshop acceptance. Owner-authorized desktop conversations have passed. Two-human Buzz access and per-user Credential Store isolation remain **not run**. Track actual results in the [validation guide](tmm-validation.md).
+This is the rehearsal procedure for a private deployment, not a claim of completed workshop acceptance. Owner-authorized desktop conversations, two-user channel isolation, and the owner-only agent denial have passed. The shared-agent allowlist conversation and full Credential Store deletion sequence remain incomplete. Track actual results in the [validation guide](tmm-validation.md).
 
 ## Before inviting attendees
 
@@ -44,7 +44,7 @@ Use synthetic project content. Save only labeled results and non-sensitive reque
 | Shared conversation | A mentions the shared agent in a new thread; B follows up in that thread. | Each receives an agent-authored reply in the same source thread. A backend tool receipt, when requested, matches the relevant call. |
 | Separate topic | B starts a second thread. | The agent does not recall a unique marker from the first thread unless deliberately supplied again. |
 | Owner-only denial | B attempts to invoke an existing owner-only agent. | Directory/author policy prevents use; no model/tool call is made for B. A still receives a reply. Absence of a reply alone is insufficient—check the authorization evidence. |
-| Private-channel denial | Keep a second private channel visible only to A. Attempt a read and a post as B using B's authenticated client. | Both are denied. A's read succeeds as a positive control. An empty channel list alone does not prove access denial. |
+| Private-channel denial | Keep a second private channel visible only to A. Attempt a read of a known event and a post as B using B's authenticated client. | A can read the fixture. B's query returns an empty event array because the relay filters private events; B's write is rejected and the event is absent even from A's query. An empty channel list alone does not prove access denial. |
 | Logout | B logs out; attempt to request a fresh identity assertion with the revoked session. | The identity service refuses the request. Already-issued assertions can remain valid for up to five minutes; do not claim immediate disconnection. |
 
 A separately authenticated signed HTTP client may verify server-side behavior when only one Mac is available. Record that limitation; it does not establish a second desktop's user experience. Do not reuse A's desktop profile or key for B.
@@ -53,7 +53,7 @@ A separately authenticated signed HTTP client may verify server-side behavior wh
 
 The shipped Buzz bridge sends text and a thread session ID to the installed native Agent Buildpack `/api/chat`. That runtime authenticates its own encrypted browser session; it has no verified incoming bearer handoff for Buzz. The identity adapter also does not retain the upstream SSO access token. **Per-user delegation from Buzz is not implemented.** Do not derive credential authority from a prompt, display name, thread ID, or model output.
 
-The optional [native Credential Store companion](credential-companion.md) provides a separate synthetic exercise alongside Buzz. Its two-user acceptance is still pending. Verify its Gateway/Store identity mapping and both browser identities before interpreting results. Do not bind user-scoped credentials to the existing Buzz runtime, whose internal chat endpoint uses application access.
+The optional [native Credential Store companion](credential-companion.md) provides a separate synthetic exercise alongside Buzz. Its A-positive/B-missing-credential phase passed; both-configured and deletion acceptance remain pending. Verify its Gateway/Store identity mapping and both browser identities before interpreting results. Do not bind user-scoped credentials to the existing Buzz runtime, whose internal chat endpoint uses application access.
 
 For that separate acceptance exercise:
 
