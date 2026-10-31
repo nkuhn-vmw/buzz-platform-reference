@@ -1,0 +1,16 @@
+---
+applications:
+  - name: buzz-workshop-receipts
+    buildpacks: [nodejs_buildpack]
+    stack: ((node-stack))
+    memory: 256M
+    disk_quota: 512M
+    instances: 1
+    command: npm start
+    health-check-type: http
+    health-check-http-endpoint: /healthz
+    routes:
+      - route: ((route-prefix))-receipts.apps.internal
+    services: [buzz-workshop-backend-keys]
+    env:
+      NODE_ENV: production

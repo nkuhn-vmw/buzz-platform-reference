@@ -53,7 +53,7 @@ A separately authenticated signed HTTP client may verify server-side behavior wh
 
 The shipped Buzz bridge sends text and a thread session ID to the installed native Agent Buildpack `/api/chat`. That runtime authenticates its own encrypted browser session; it has no verified incoming bearer handoff for Buzz. The identity adapter also does not retain the upstream SSO access token. **Per-user delegation from Buzz is not implemented.** Do not derive credential authority from a prompt, display name, thread ID, or model output.
 
-A separately deployed native Agent Buildpack UI with SSO is a candidate for demonstrating platform delegation alongside Buzz. It is not included or accepted by this guide. Before deploying that companion, agree on this boundary and verify its Gateway/Store identity mapping. Do not bind user-scoped credentials to the existing Buzz runtime, whose internal chat endpoint uses application access.
+The optional [native Credential Store companion](credential-companion.md) provides a separate synthetic exercise alongside Buzz. Its two-user acceptance is still pending. Verify its Gateway/Store identity mapping and both browser identities before interpreting results. Do not bind user-scoped credentials to the existing Buzz runtime, whose internal chat endpoint uses application access.
 
 For that separate acceptance exercise:
 
