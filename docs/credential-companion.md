@@ -2,7 +2,11 @@
 
 This optional application demonstrates the native Tanzu Agent Buildpack path alongside Buzz. Buzz's ACP bridge does **not** forward a user's platform identity to the native runtime. Keep the two demonstrations separate.
 
-The reference companion and protected MCP backend are deployed on Cloud Foundry. Both real SSO accounts have authenticated independently. A live user A call returned receipt A; user B, with no saved credential, was denied by the Store without using A's credential. Both users have now saved their own entries. The remaining both-configured and deletion checks are **not yet accepted**. See [deployment validation](tmm-validation.md) for the recorded evidence.
+The reference companion and protected MCP backend are deployed on Cloud Foundry.
+Two real SSO accounts passed the synthetic credential exercise: A received A,
+B without a credential was denied, both configured users received their own
+receipts, and deleting A's entry denied A while B continued successfully.
+See [deployment validation](tmm-validation.md) for the recorded evidence and limits.
 
 ```mermaid
 flowchart LR
@@ -21,7 +25,7 @@ flowchart LR
 
 The backend accepts two distinct random credentials and returns a non-secret `A` or `B` label plus a fresh nonce. It selects the label from the validated credential, never from the model's prompt or tool arguments. No real business system or personal dataset is connected.
 
-The tested foundation is configured to resolve across issuers by **email**, with matching identity-provider origins disabled. Foundation UAA and App SSO are separate identity namespaces. The observed success demonstrates email-based credential resolution for a controlled test account; it does not establish issuer/subject isolation or production suitability. An account in a trusted issuer with the same email may resolve the same credential. Verify provider ownership and email-verification policy before using this pattern.
+The tested foundation is configured to resolve across issuers by **email**, with matching identity-provider origins disabled. Foundation UAA and App SSO are separate identity namespaces. The observed success demonstrates email-based credential resolution for two controlled test accounts; it does not establish issuer/subject isolation or production suitability. An account in a trusted issuer with the same email may resolve the same credential. Verify provider ownership and email-verification policy before using this pattern.
 
 The exact-email proxy and native agent have separate SSO sessions. The proxy's allowlist does not enforce equality with the native session. Use separate browser profiles, verify **both** identities before each test, and stop if they differ. This is a documented test precondition, not an enforced native identity boundary. The gate rejects an explicitly unverified email; its upstream default permits an absent verification claim, so inspect actual provider behavior. Do not add an unverified-email override.
 
@@ -44,6 +48,16 @@ Create these services using plans available in your marketplace:
 | `buzz-workshop-backend-keys` | `credhub` / `default` | Protected backend only |
 
 `shared` is the service plan name. It does not mean credentials must use store scope. The acceptance exercise uses **user** scope only, with no shared fallback and no second bound store.
+
+After confirming the offerings and plans in your marketplace, create the four
+non-secret service instances (replace the two plan placeholders):
+
+```sh
+node scripts/cf.mjs create-service ai-models YOUR_AI_PLAN buzz-workshop-ai --wait
+node scripts/cf.mjs create-service p-identity YOUR_SSO_PLAN buzz-workshop-sso --wait
+node scripts/cf.mjs create-service mcp-gateway gateway buzz-workshop-gateway --wait
+node scripts/cf.mjs create-service credential-store shared buzz-workshop-credentials --wait
+```
 
 Generate two synthetic backend tokens into an ignored private file, without printing them:
 
@@ -161,6 +175,26 @@ For every denial, record the actual Gateway/Store cause. Only a missing credenti
 Verify that the provider asserts verified, controlled email identities. Verify the store's debug endpoints cannot expose other users' credentials. Keep real emails, subjects, public keys and token values in private operations only; public evidence uses A/B labels.
 
 Static-token deletion does not test OAuth refresh or expiry. Do not advertise those without a separate supported live exercise. If the native MCP panel asks to connect again after a restart, sign into the native agent afresh and retry the connection; check the existing credential before saving a duplicate.
+
+## Read the live result
+
+Expand the completed tool call to inspect its actual result. In this capture,
+A still received A after B had saved its own credential. The displayed nonce
+matched the protected backend log.
+
+![Actual native tool result showing synthetic principal A and its backend-matched nonce](assets/native-credential-a.jpg)
+
+After A deleted its own entry, the next tool call failed. The first observed
+denial was about nine seconds after deletion; this was when the next request
+ran, not a measured nine-second cache lifetime. A new conversation also failed.
+Store logs identified A and `outcome=not_found`. B's independent call still
+returned B with a fresh backend-matched nonce.
+
+![Actual native tool error after deleting A's user-scoped credential](assets/native-credential-deleted.jpg)
+
+The screenshot's generic error alone would be inconclusive. Pair it with the
+Store cause and B's successful control, as this rehearsal did. These captures
+omit account names, private foundation URLs, and credential values.
 
 ## End the workshop
 

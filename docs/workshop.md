@@ -1,6 +1,25 @@
 # TMM workshop facilitator guide
 
-This is the rehearsal procedure for a private deployment, not a claim of completed workshop acceptance. Owner-authorized desktop conversations, two-user channel isolation, and the owner-only agent denial have passed. The shared-agent allowlist conversation and full Credential Store deletion sequence remain incomplete. Track actual results in the [validation guide](tmm-validation.md).
+This is the facilitator procedure for the deployed private pilot. The two-user
+shared-agent, channel-isolation, owner-only denial, logout, and native Credential
+Store A/B deletion sequence have passed. Signed attendee distribution remains
+pending; the second user's Buzz server checks used a separate signed HTTP
+client with real SSO. Track the exact limits in the [validation guide](tmm-validation.md).
+
+## Suggested live session
+
+| Segment | Demonstration | What to explain |
+| --- | --- | --- |
+| 5 minutes | Open the operator's Buzz desktop and project channel. | Local desktop, hosted relay, and independent human identities. |
+| 10 minutes | Mention Workshop Helper; have the approved second user follow up in the same thread, then start a new one. | Channel membership, explicit agent selection, shared thread context, and separate topics. |
+| 5 minutes | Contrast the shared helper with an existing owner-only agent and the private channel. | Reading a conversation does not grant permission to invoke an agent or access another channel. |
+| 10 minutes | Open the native companion in two browser profiles; show A/B receipts, remove A's entry, and call again as both users. | Credential Store selects each user's credential; B remains unaffected. This flow is separate from Buzz. |
+| 5 minutes | Show the CF apps, tasks, bindings, and the recorded receipts. | Platform services and scoped access, plus the limits that still require production decisions. |
+
+Complete enrollment and sign-in before presenting. Keep grant expiry beyond
+the session, and rehearse with synthetic data only. Use the [desktop screenshots](getting-started.md#two-people-sharing-one-agent)
+and [credential screenshots](credential-companion.md#read-the-live-result) as
+explanations, not substitutes for a working deployment.
 
 ## Before inviting attendees
 
@@ -53,7 +72,7 @@ A separately authenticated signed HTTP client may verify server-side behavior wh
 
 The shipped Buzz bridge sends text and a thread session ID to the installed native Agent Buildpack `/api/chat`. That runtime authenticates its own encrypted browser session; it has no verified incoming bearer handoff for Buzz. The identity adapter also does not retain the upstream SSO access token. **Per-user delegation from Buzz is not implemented.** Do not derive credential authority from a prompt, display name, thread ID, or model output.
 
-The optional [native Credential Store companion](credential-companion.md) provides a separate synthetic exercise alongside Buzz. Its A-positive/B-missing-credential phase passed; both-configured and deletion acceptance remain pending. Verify its Gateway/Store identity mapping and both browser identities before interpreting results. Do not bind user-scoped credentials to the existing Buzz runtime, whose internal chat endpoint uses application access.
+The optional [native Credential Store companion](credential-companion.md) provides a separate synthetic exercise alongside Buzz. Its A-positive/B-missing-credential, both-configured, and A-delete/B-unaffected phases passed. Verify its Gateway/Store identity mapping and both browser identities before interpreting results. Do not bind user-scoped credentials to the existing Buzz runtime, whose internal chat endpoint uses application access.
 
 For that separate acceptance exercise:
 
