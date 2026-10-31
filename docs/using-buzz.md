@@ -14,6 +14,10 @@ approved distribution route. Follow the operator's release link and
 organization sign-in instructions; never put a relay secret or an agent key in
 the client configuration.
 
+The reference pilot's signed attendee build is still pending. Follow these steps
+after your operator provides that distribution; the local facilitator build is
+not an attendee installation path.
+
 After installing the signed client:
 
 1. Open Buzz and connect to the community address provided by your operator.
@@ -54,6 +58,11 @@ The [private channel form](getting-started.md#private-project-channel-form) show
 4. The mentioned, authorized agent receives the event and replies in its
    admitted channel/thread. Continue the discussion in that thread.
 
+The thread mention picker also offers **Automatically mention agents** and a
+per-agent selection. Leave it off to choose each invocation explicitly, or
+select the intended agent when you want subsequent thread replies to address
+it automatically. This convenience does not change the agent's author policy.
+
 An explicit agent mention selects the agent. The runtime does not select an
 agent by guessing from the message text. Only agents that are discoverable to
 you and authorized for the destination can be mentioned. The agent's owner
@@ -68,9 +77,10 @@ deployment config. Ask each teammate to provide the key shown by their
 verified Buzz identity; do not build this list from email addresses. The owner
 is included automatically. This admits message authors; each teammate and the
 agent identity still need channel access. Ask the operator if an agent does
-not answer. The private pilot has verified owner-authorized Helper and
-Researcher turns; a two-human allowlist workshop has not run, so teammate
-allowlist behavior remains unverified live.
+not answer. The private pilot verified both owner-authorized runtimes and a
+separate Workshop Helper shared with one approved teammate. That teammate
+received an answer in the existing thread and a separate context in a new
+thread; an owner-only helper explicitly rejected the same teammate.
 
 For the hosted Tanzu adapter, the Buzz supervisor supplies the route from the
 admitted source event. The adapter forwards the prompt and returns assistant
@@ -94,8 +104,9 @@ make the agent a member of every channel, grant a human's roles, or expand the
 agent's model/tool permissions. Channel membership and runtime service bindings
 are separate controls.
 
-The private pilot has verified channel creation, message persistence, and
-owner-authorized agent answers. A two-human shared-room/allowlist workshop and
-signed, generally available desktop distribution are not verified. Team
-members need both channel access and an author policy that admits their
-messages. These results do not represent a public deployment.
+The private pilot has verified two-user shared-room/allowlist behavior and
+private-channel denial. The second user's signed HTTP client used its own
+real SSO session and key; a second desktop's UX was not tested. Signed,
+generally available desktop distribution remains pending. Team members need
+both channel access and an author policy that admits their messages. These
+results do not represent a public deployment.

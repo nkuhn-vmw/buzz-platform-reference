@@ -2,7 +2,11 @@
 
 This optional application demonstrates the native Tanzu Agent Buildpack path alongside Buzz. Buzz's ACP bridge does **not** forward a user's platform identity to the native runtime. Keep the two demonstrations separate.
 
-The reference companion and protected MCP backend are deployed on Cloud Foundry. Both real SSO accounts have authenticated independently. A live user A call returned receipt A; user B, with no saved credential, was denied by the Store without using A's credential. Both users have now saved their own entries. The remaining both-configured and deletion checks are **not yet accepted**. See [deployment validation](tmm-validation.md) for the recorded evidence.
+The reference companion and protected MCP backend are deployed on Cloud Foundry.
+Two real SSO accounts passed the synthetic credential exercise: A received A,
+B without a credential was denied, both configured users received their own
+receipts, and deleting A's entry denied A while B continued successfully.
+See [deployment validation](tmm-validation.md) for the recorded evidence and limits.
 
 ```mermaid
 flowchart LR
@@ -21,7 +25,7 @@ flowchart LR
 
 The backend accepts two distinct random credentials and returns a non-secret `A` or `B` label plus a fresh nonce. It selects the label from the validated credential, never from the model's prompt or tool arguments. No real business system or personal dataset is connected.
 
-The tested foundation is configured to resolve across issuers by **email**, with matching identity-provider origins disabled. Foundation UAA and App SSO are separate identity namespaces. The observed success demonstrates email-based credential resolution for a controlled test account; it does not establish issuer/subject isolation or production suitability. An account in a trusted issuer with the same email may resolve the same credential. Verify provider ownership and email-verification policy before using this pattern.
+The tested foundation is configured to resolve across issuers by **email**, with matching identity-provider origins disabled. Foundation UAA and App SSO are separate identity namespaces. The observed success demonstrates email-based credential resolution for two controlled test accounts; it does not establish issuer/subject isolation or production suitability. An account in a trusted issuer with the same email may resolve the same credential. Verify provider ownership and email-verification policy before using this pattern.
 
 The exact-email proxy and native agent have separate SSO sessions. The proxy's allowlist does not enforce equality with the native session. Use separate browser profiles, verify **both** identities before each test, and stop if they differ. This is a documented test precondition, not an enforced native identity boundary. The gate rejects an explicitly unverified email; its upstream default permits an absent verification claim, so inspect actual provider behavior. Do not add an unverified-email override.
 
@@ -30,6 +34,12 @@ The companion uses one instance. Restart rotates its gate cookie key and require
 ## Deploy in a dedicated space
 
 Use a separate CF space containing only synthetic workshop resources. Application SSO admission does not authorize CF role grants. Confirm the least role needed for each attendee's own Credential Store management; do not grant SpaceDeveloper merely to make the screen appear. SpaceDeveloper can read bindings and change apps. Inspection of the deployed reference service confirmed that `SpaceAuditor` is accepted for managing one’s own credentials; store-scoped writes require `SpaceManager`. Both approved participants successfully saved their own entries with only SpaceAuditor in this space and the required OrgUser membership. Obtain explicit approval before adding those roles. See [CF role permissions](https://docs.cloudfoundry.org/concepts/roles.html).
+
+SpaceAuditor also permits reading app logs, usage events, and app status/settings
+throughout that space. The environment-read denial does not make logs private
+between attendees. Keep all apps and logs in this space limited to synthetic
+data and identifiers every participant is authorized to see; never log tokens
+or confidential conversation content. See the same [official role table](https://docs.cloudfoundry.org/concepts/roles.html).
 
 Create a private deployment configuration using the [installation guide](install.md), with a dedicated `space`, `routePrefix`, `cfHome`, `stateDir`, and `credentialsDir`. Keep the two exact approved emails in `allowedEmails`. Point `BUZZ_DEPLOYMENT_CONFIG` to that file for **every** command below; the CF wrapper refuses an API/org/space mismatch. Authenticate its isolated CF home normally; never copy a token file from another context.
 
@@ -44,6 +54,16 @@ Create these services using plans available in your marketplace:
 | `buzz-workshop-backend-keys` | `credhub` / `default` | Protected backend only |
 
 `shared` is the service plan name. It does not mean credentials must use store scope. The acceptance exercise uses **user** scope only, with no shared fallback and no second bound store.
+
+After confirming the offerings and plans in your marketplace, create the four
+non-secret service instances (replace the two plan placeholders):
+
+```sh
+node scripts/cf.mjs create-service ai-models YOUR_AI_PLAN buzz-workshop-ai --wait
+node scripts/cf.mjs create-service p-identity YOUR_SSO_PLAN buzz-workshop-sso --wait
+node scripts/cf.mjs create-service mcp-gateway gateway buzz-workshop-gateway --wait
+node scripts/cf.mjs create-service credential-store shared buzz-workshop-credentials --wait
+```
 
 Generate two synthetic backend tokens into an ignored private file, without printing them:
 
@@ -74,6 +94,10 @@ model: YOUR_MODEL_NAME
 allowed-emails: attendee-a@example.invalid,attendee-b@example.invalid
 sso-provider: YOUR_CONFIGURED_IDENTITY_PROVIDER
 ```
+
+`allowedEmails` in the deployment JSON configures Buzz identity admission.
+`allowed-emails` in this vars file populates the companion's `APP_ALLOWED_EMAILS`
+environment variable. They are separate allowlists; configure both deliberately.
 
 Deploy the backend, bind it to the Gateway using the SSO service, and wait for the asynchronous binding to succeed before restaging:
 
@@ -143,11 +167,72 @@ The store ID is the service-instance GUID. The resource name is **`buzz-workshop
 
 Keep the bearer token and management access token out of prompts, shell arguments, logs, screenshots and source control. Use private input or an approved secrets workflow. The Gateway-to-Store `/v1/resolve` endpoint is an internal mTLS contract; do not call it as an agent-side SDK.
 
-A prior native rehearsal found that Hub inferred OAuth for this OIDC Gateway even though the backend needs a static bearer credential. Its static-save API worked, but that does not establish vendor support policy for API-based creation. If Hub will not offer the static type, record the limitation and confirm the approved management workflow. Do not switch off Gateway authentication or move the secret into the descriptor.
+A prior native rehearsal found that Tanzu Hub inferred OAuth for this OIDC Gateway even though the backend needs a static bearer credential. Its static-save API worked, but that does not establish vendor support policy for API-based creation. If Hub will not offer the static type, record the limitation and confirm the approved management workflow. Do not switch off Gateway authentication or move the secret into the descriptor.
+
+## Participant management commands
+
+Use Node.js 24 and the cf CLI on the participant's workstation. The operator
+provides the exact API/org/space, Store GUID, Store dashboard origin, and only
+that participant's disposable token. Transfer A's token only to A and B's only
+to B using the organization's approved private secret-transfer channel. Do not
+distribute the combined backend key file or an administrator's CF session.
+
+Sign in to a new isolated CF home as the participant. Replace the example
+target; follow the passcode URL printed by `cf login --sso`:
+
+```sh
+umask 077
+mkdir -p .credentials/workshop-participant/cf-home
+export CF_HOME="$PWD/.credentials/workshop-participant/cf-home"
+cf login --sso -a https://api.example.invalid -o workshop-org -s workshop-delegation
+cf target
+```
+
+Save the privately received token in `.credentials/workshop-participant/token.json`
+using a local editor, never a prompt or a shell argument. The file contains
+only `{"token":"THE_PARTICIPANTS_SYNTHETIC_TOKEN"}`. Set mode 600. Then create
+`.credentials/workshop-participant/manage.json`, replacing every example and
+using absolute filesystem paths:
+
+```json
+{
+  "api": "https://api.example.invalid",
+  "org": "workshop-org",
+  "space": "workshop-delegation",
+  "cfHome": "/ABSOLUTE/PATH/.credentials/workshop-participant/cf-home",
+  "email": "attendee-a@example.invalid",
+  "storeOrigin": "https://credential-store.example.invalid",
+  "storeId": "11111111-1111-4111-8111-111111111111",
+  "tokenFile": "/ABSOLUTE/PATH/.credentials/workshop-participant/token.json"
+}
+```
+
+The operator can obtain the Store GUID using `node scripts/cf.mjs service
+buzz-workshop-credentials --guid` in the companion context and the dashboard
+origin from `node scripts/cf.mjs service buzz-workshop-credentials`. Participants
+must use their own `cfHome` and exact account email in the management file.
+
+```sh
+chmod 600 .credentials/workshop-participant/token.json
+node scripts/workshop-credential.mjs inspect .credentials/workshop-participant/manage.json
+node scripts/workshop-credential.mjs save .credentials/workshop-participant/manage.json
+# During the deletion phase, as that same user:
+node scripts/workshop-credential.mjs delete .credentials/workshop-participant/manage.json
+```
+
+The helper checks the exact CF target and account, verifies that the Store
+belongs to the space and its dashboard matches the configured origin, and uses
+only `scope: user` for the fixed synthetic resource. It refuses to overwrite an
+entry or proceed with shared fallback. It reads the token from the private file
+only when saving and prints status metadata, never credentials. If the CF
+session expires, sign in again to the same isolated home. A 404 can indicate
+missing space access; resolve the approved role rather than substituting an
+administrator's token. `save` after `delete` restores the disposable entry for
+another rehearsal.
 
 ## Rehearse the isolation and deletion sequence
 
-Use a new conversation for each step. Ask: **“Call workshop_credential_receipt now and report its actual principal label and nonce. If the tool fails, report the failure.”** Read the actual tool result, then match its nonce in the backend log. Model prose alone is insufficient. Require a successful A receipt on this exact deployment before interpreting any denied call. That positive control establishes path rewriting, backend reachability and permission to call the MCP tool.
+Use a new conversation for each step. Ask: **“Call workshop_credential_receipt now. Report the actual principal label and nonce from the tool. If it fails, report the failure.”** Read the actual tool result, then match its nonce in the backend log. Model prose alone is insufficient. Require a successful A receipt on this exact deployment before interpreting any denied call. That positive control establishes path rewriting, backend reachability and permission to call the MCP tool.
 
 For every denial, record the actual Gateway/Store cause. Only a missing credential for the intended authenticated user counts as the expected denial. Stale native identity, tool-permission refusal, OIDC failure, timeout or an unreachable backend is **inconclusive**. Resolve that cause and repeat the affected step; never count generic connection failure as isolation.
 
@@ -161,6 +246,26 @@ For every denial, record the actual Gateway/Store cause. Only a missing credenti
 Verify that the provider asserts verified, controlled email identities. Verify the store's debug endpoints cannot expose other users' credentials. Keep real emails, subjects, public keys and token values in private operations only; public evidence uses A/B labels.
 
 Static-token deletion does not test OAuth refresh or expiry. Do not advertise those without a separate supported live exercise. If the native MCP panel asks to connect again after a restart, sign into the native agent afresh and retry the connection; check the existing credential before saving a duplicate.
+
+## Read the live result
+
+Expand the completed tool call to inspect its actual result. In this capture,
+A still received A after B had saved its own credential. The displayed nonce
+matched the protected backend log.
+
+![Actual native tool result showing synthetic principal A and its backend-matched nonce](assets/native-credential-a.jpg)
+
+After A deleted its own entry, the next tool call failed. The first observed
+denial was about nine seconds after deletion; this was when the next request
+ran, not a measured nine-second cache lifetime. A new conversation also failed.
+Store logs identified A and `outcome=not_found`. B's independent call still
+returned B with a fresh backend-matched nonce.
+
+![Actual native tool error after deleting A's user-scoped credential](assets/native-credential-deleted.jpg)
+
+The screenshot's generic error alone would be inconclusive. Pair it with the
+Store cause and B's successful control, as this rehearsal did. These captures
+omit account names, private foundation URLs, and credential values.
 
 ## End the workshop
 

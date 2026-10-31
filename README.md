@@ -24,7 +24,9 @@ The deployment uses platform service bindings for persistence, identity, model a
 
 ## Validation status
 
-This source tree is a pilot reference. In a private pilot, operator/desktop SSO, channel message persistence, and live owner-authorized Helper (Tanzu) and Researcher (Buzz built-in) turns through the read-only Gateway tool have succeeded. The worker PostgreSQL connection verified TLS 1.3 and its certificate in a CF Task. The real desktop request and source-thread reply were also verified and captured. An isolated CF Task also verified shutdown at a configured worker deadline using synthetic child processes. Multi-human allowlist behavior, per-user Credential Store delegation, and signed desktop distribution remain unverified. See the [validation guide](docs/tmm-validation.md) for evidence boundaries; these results do not establish whole-pilot acceptance or a public service.
+The private pilot has verified real SSO, desktop conversations, both hosted runtimes, two-user shared-agent threads, private-channel isolation, owner-only denial, and participant logout. Worker PostgreSQL verified TLS 1.3 and its certificate; duplicate-task, restart/context, and configured-deadline checks also passed. The separate native SSO companion verified distinct A/B Credential Store receipts and deletion isolation through MCP Gateway.
+
+Per-user delegation **inside Buzz** is not implemented; the companion demonstrates it through the native Agent Buildpack UI under the foundation's email-based mapping for two synthetic test accounts. That is not issuer/subject isolation, and production trust-policy approval remains open. Signed/notarized attendee distribution remains pending. See the [validation guide](docs/tmm-validation.md) for the exact evidence. These results do not establish production readiness or a public hosted service.
 
 ## Start here
 
@@ -41,7 +43,7 @@ This source tree is a pilot reference. In a private pilot, operator/desktop SSO,
 
 ## Screenshots
 
-The [getting-started guide](docs/getting-started.md) includes authentic desktop screenshots of sign-in, private channel creation, channel membership, and a live hosted-agent reply.
+The [getting-started guide](docs/getting-started.md) includes authentic desktop screenshots of sign-in, private channel creation, channel membership, and owner/shared-agent replies. The [native companion guide](docs/credential-companion.md#read-the-live-result) shows an actual credential receipt and post-deletion denial.
 
 [![A real desktop conversation with the hosted Platform Helper](docs/assets/agent-thread.jpg)](docs/getting-started.md#hosted-agent-reply)
 

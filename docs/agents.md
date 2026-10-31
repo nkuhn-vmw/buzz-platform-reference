@@ -20,8 +20,11 @@ verified Buzz identity, not from email addresses. The owner is included
 automatically. Keep `owner-only` as the default. A mention never overrides the
 author gate or channel authorization. Live owner-authorized turns have been
 verified for both Helper (Tanzu adapter) and Researcher (Buzz built-in runtime),
-including signed replies to their source-thread roots. The separate
-two-human allowlist case has not been verified live.
+including signed replies to their source-thread roots. A separate **Workshop
+Helper** also passed a two-human allowlist conversation: the second approved
+user followed up in the owner's thread, received a fresh tool-backed reply,
+and kept a new top-level topic separate. Existing owner-only agents stayed
+owner-only and explicitly rejected that participant's invocation.
 
 Only the addressed agent is selected by an explicit mention. Other agents do
 not automatically answer just because they are members of the room. Agent to

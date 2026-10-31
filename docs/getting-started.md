@@ -2,6 +2,10 @@
 
 This is the team-member guide for a Buzz community that an operator has already deployed and distributed. Ask your operator for the signed client distribution, community address, organization sign-in instructions, project channel, and approved agent names. This repository does not host a community or provide public account registration.
 
+The reference pilot does not yet have a signed attendee build. These attendee
+installation steps begin only after your operator supplies an approved signed
+distribution; the current local facilitator build is not that installer.
+
 ## Join a project conversation
 
 1. Install the Buzz app supplied by your organization and open Settings → Profile.
@@ -83,3 +87,20 @@ The same desktop flow also works with the Buzz built-in runtime. This real reque
 </details>
 
 The sign-in image shows the entry point before account details are displayed; it is not a sign-in success receipt. The channel image shows the private-room creation form. The [validation guide](tmm-validation.md) separates verified live behavior from remaining pilot checks.
+
+### Two people sharing one agent
+
+This real desktop view shows **Workshop Helper** answering the second approved
+participant in the owner's existing thread. Both tool nonces matched backend
+logs. The operator then used desktop mention autocomplete to ask a follow-up;
+the helper retained the thread's marker. The second participant is shown by
+Buzz's abbreviated identity label and used an independently authenticated
+signed HTTP client for this rehearsal. This is the operator's desktop view,
+not evidence of a second desktop installation.
+
+<details>
+<summary>View the shared-thread screenshot</summary>
+
+![A real shared Buzz thread with Workshop Helper, a second participant, and the operator's desktop follow-up](assets/shared-workshop-thread.jpg)
+
+</details>
