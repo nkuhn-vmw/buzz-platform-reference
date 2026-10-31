@@ -93,8 +93,10 @@ transcript remained available and Helper recalled its prior nonce without
 another tool call. A fresh top-level thread returned a distinct `NEW_THREAD`
 response. This demonstrates transcript-backed context across that restart; it
 does not mean the provider session or task-local files persist. Linux TLS
-fixture/CI coverage exercises lease loss and process-group termination. Grant
-expiry timing has not been exercised in a live task; see the [validation
+fixture/CI coverage exercises lease loss and process-group termination. An
+isolated live CF Task also verified the deployed supervisor's configured
+deadline using synthetic child processes and a dedicated lease. This did not
+test an issuer-expired grant in a real conversation; see the [validation
 guide](tmm-validation.md) for the remaining scope and evidence limits.
 
 ## Built-in Buzz runtime

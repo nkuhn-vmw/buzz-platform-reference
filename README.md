@@ -24,7 +24,7 @@ The deployment uses platform service bindings for persistence, identity, model a
 
 ## Validation status
 
-This source tree is a pilot reference. In a private pilot, operator/desktop SSO, channel message persistence, and live owner-authorized Helper (Tanzu) and Researcher (Buzz built-in) turns through the read-only Gateway tool have succeeded. The worker PostgreSQL connection verified TLS 1.3 and its certificate in a CF Task. The real desktop request and source-thread reply were also verified and captured. Multi-human allowlist behavior, live grant-expiry timing, and signed desktop distribution remain unverified. See the [validation guide](docs/tmm-validation.md) for evidence boundaries; these results do not establish whole-pilot acceptance or a public service.
+This source tree is a pilot reference. In a private pilot, operator/desktop SSO, channel message persistence, and live owner-authorized Helper (Tanzu) and Researcher (Buzz built-in) turns through the read-only Gateway tool have succeeded. The worker PostgreSQL connection verified TLS 1.3 and its certificate in a CF Task. The real desktop request and source-thread reply were also verified and captured. An isolated CF Task also verified shutdown at a configured worker deadline using synthetic child processes. Multi-human allowlist behavior, per-user Credential Store delegation, and signed desktop distribution remain unverified. See the [validation guide](docs/tmm-validation.md) for evidence boundaries; these results do not establish whole-pilot acceptance or a public service.
 
 ## Start here
 
