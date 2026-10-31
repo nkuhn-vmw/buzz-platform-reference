@@ -4,7 +4,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSy
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { spawn } from 'node:child_process';
-import { advisoryKey, databaseConfig, validateGrant, validateIdentityServiceName } from '../lease-config.mjs';
+import { advisoryKey, databaseConfig, validateGrant, validateIdentityServiceName, LEASE_TAKEOVER_GRACE_MS } from '../lease-config.mjs';
 import { acquireLease } from '../lease.mjs';
 
 test('grant validation fails closed for absent, malformed, and expired grants', () => {
@@ -88,10 +88,11 @@ test('lease loss is detected on the owning PostgreSQL session', {skip: !process.
   }
 });
 
-test('worker kills its whole child group after lease loss before another lease starts', {skip: !process.env.BUZZ_AGENT_TEST_DATABASE_URL, timeout:30000}, async () => {
+for (const cause of ['lease loss', 'grant expiry']) {
+test(`worker kills its whole child group after ${cause} before another lease starts`, {skip: !process.env.BUZZ_AGENT_TEST_DATABASE_URL, timeout:40000}, async () => {
   const {default: pg} = await import('pg');
   const config = testConnectionConfig();
-  const pubkey = 'c'.repeat(64);
+  const pubkey = (cause === 'lease loss' ? 'c' : 'd').repeat(64);
   const ownerKey = advisoryKey(pubkey);
   const unsigned = BigInt.asUintN(64, BigInt(ownerKey));
   const classId = Number((unsigned >> 32n) & 0xffffffffn);
@@ -108,8 +109,9 @@ test('worker kills its whole child group after lease loss before another lease s
     const pidFile = join(tempRoot, 'children.json');
     const fakeAgent = `#!/bin/sh\nexec node -e 'const {spawn}=require("node:child_process");const fs=require("node:fs");process.on("SIGTERM",()=>{});const child=spawn(process.execPath,["-e","process.on(\\"SIGTERM\\",()=>{});setInterval(()=>{},1000)"]);fs.writeFileSync(process.env.TEST_CHILD_PIDS,JSON.stringify([process.pid,child.pid]));setInterval(()=>{},1000)'\n`;
     writeFileSync(join(tempRoot, 'bin', 'buzz-acp'), fakeAgent, {mode:0o755});
+    const expiresAt = Date.now() + (cause === 'grant expiry' ? LEASE_TAKEOVER_GRACE_MS + 8000 : 90000);
     const env = {...process.env, BUZZ_AGENT_DATABASE_CONFIG:JSON.stringify(config), BUZZ_ACP_AGENT_PUBKEY:pubkey,
-      BUZZ_GRANT_EXPIRES_AT:new Date(Date.now()+90000).toISOString(), BUZZ_WORKSPACE:join(tempRoot, 'workspace'),
+      BUZZ_GRANT_EXPIRES_AT:new Date(expiresAt).toISOString(), BUZZ_WORKSPACE:join(tempRoot, 'workspace'),
       HOME:join(tempRoot, 'home'), XDG_CONFIG_HOME:join(tempRoot, 'config'), XDG_DATA_HOME:join(tempRoot, 'data'), XDG_CACHE_HOME:join(tempRoot, 'cache'), TEST_CHILD_PIDS:pidFile};
     mkdirSync(env.BUZZ_WORKSPACE);
     task = spawn(process.execPath, [join(tempRoot, 'worker.mjs')], {env, stdio:['ignore','ignore','pipe']});
@@ -129,12 +131,19 @@ test('worker kills its whole child group after lease loss before another lease s
     while (!existsSync(pidFile) && Date.now() < childDeadline) await new Promise(resolve => setTimeout(resolve,100));
     assert.ok(existsSync(pidFile), `worker did not start its child group; stderr: ${workerStderr}`);
     const childPids = JSON.parse(readFileSync(pidFile, 'utf8'));
-    await killer.query('SELECT pg_terminate_backend($1::int)', [backendPid]);
+    await assert.rejects(acquireLease({connectionConfig:config, agentPubkey:pubkey}), /already owns/);
+    if (cause === 'lease loss') await killer.query('SELECT pg_terminate_backend($1::int)', [backendPid]);
     const code = await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('worker did not exit after lease loss')), 8000);
+      const waitMs = cause === 'grant expiry' ? Math.max(1000, expiresAt - Date.now() + 3000) : 8000;
+      const timeout = setTimeout(() => reject(new Error(`worker did not exit after ${cause}`)), waitMs);
       task.once('exit', value => { clearTimeout(timeout); resolve(value); });
     });
-    assert.notEqual(code, 0, 'worker must fail after losing its lock');
+    assert.notEqual(code, 0, `worker must fail after ${cause}`);
+    if (cause === 'grant expiry') {
+      assert.match(workerStderr, /Agent stopping: owner grant expired/);
+      assert.ok(Date.now() >= expiresAt, 'worker stopped before its grant deadline');
+      assert.ok(Date.now() - expiresAt < 1500, 'hard deadline incorrectly allowed a further shutdown grace period');
+    }
     for (const pid of childPids) {
       assert.throws(() => process.kill(pid, 0), error => error.code === 'ESRCH', `child process ${pid} survived worker shutdown`);
     }
@@ -146,3 +155,4 @@ test('worker kills its whole child group after lease loss before another lease s
     rmSync(tempRoot, {recursive:true, force:true});
   }
 });
+}
