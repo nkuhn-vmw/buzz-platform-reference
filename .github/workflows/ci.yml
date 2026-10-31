@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        directory: [apps/identity, apps/agent, apps/pilot-mcp, integrations/agent, integrations/cf-mtls]
+        directory: [apps/identity, apps/agent, apps/pilot-mcp, apps/workshop-mcp, integrations/agent, integrations/cf-mtls]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -34,7 +34,8 @@ jobs:
       - run: npm ci --ignore-scripts --prefix apps/identity
       - run: node --test scripts/test/*.test.mjs apps/relay/bindings.test.mjs
       - run: git diff --check
-      - run: bash -n scripts/*.sh
+      - run: |
+          for file in scripts/*.sh apps/workshop-agent/runtime/launch.sh; do bash -n "$file"; done
   identity-database:
     runs-on: ubuntu-latest
     services:

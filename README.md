@@ -36,6 +36,7 @@ This source tree is a pilot reference. In a private pilot, operator/desktop SSO,
 - [Architecture and trust boundaries](docs/architecture.md)
 - [Validation checklist](docs/tmm-validation.md)
 - [TMM workshop rehearsal and participant onboarding](docs/workshop.md)
+- [Native SSO and per-user Credential Store companion](docs/credential-companion.md)
 - [Troubleshooting](docs/troubleshooting.md)
 
 ## Screenshots
