@@ -7,7 +7,7 @@ completed the deployment checklist.
 
 ## At a glance
 
-![Buzz Cloud Foundry architecture](assets/architecture.svg)
+![Buzz Cloud Foundry architecture](../../../docs/assets/architecture.svg)
 
 The relay, identity adapter, and agent worker use separate PostgreSQL
 services. Relay messages are durable in relay PostgreSQL. Relay objects use an
@@ -34,7 +34,7 @@ optional and is not implemented end to end.
 
 ## Human sign-in and relay identity
 
-![Human OIDC sign-in and relay identity flow](assets/identity-flow.svg)
+![Human OIDC sign-in and relay identity flow](../../../docs/assets/identity-flow.svg)
 
 The desktop opens a system browser to the identity adapter. The adapter uses
 the bound platform SSO service and OIDC authorization-code flow with PKCE,
@@ -53,7 +53,7 @@ channel access.
 
 ## Agent work and lifecycle
 
-![Hosted agent runtime and task lifecycle](assets/agent-lifecycle.svg)
+![Hosted agent runtime and task lifecycle](../../../docs/assets/agent-lifecycle.svg)
 
 An owner-authorized identity binding supplies the agent key, owner key, grant,
 and grant deadline to the CF Task. The task refuses expired grants, acquires a
@@ -87,7 +87,7 @@ evidence of a verified live worker.
 
 ## Team and thread workflow
 
-![Owner, teammate, channel, and agent workflow](assets/team-workflow.svg)
+![Owner, teammate, channel, and agent workflow](../../../docs/assets/team-workflow.svg)
 
 An agent remains owned by one person. The owner enrolls its key through SSO
 and grants the identity service permission to issue short-lived assertions.
@@ -238,9 +238,9 @@ flowchart LR
 
 ## Source references
 
-- Relay service binding resolution: [`apps/relay/bindings.mjs`](../apps/relay/bindings.mjs)
-- OIDC session, human assertion, and agent grant handlers: [`apps/identity/src/server.mjs`](../apps/identity/src/server.mjs)
-- Internal JWKS mTLS endpoints: [`server.mjs`](../integrations/cf-mtls/server.mjs), [`proxy.mjs`](../integrations/cf-mtls/proxy.mjs)
-- Worker launcher, lease supervisor, and advisory lock: [`launch.mjs`](../apps/agent/launch.mjs), [`worker.mjs`](../apps/agent/worker.mjs), [`lease.mjs`](../apps/agent/lease.mjs), [`lease-config.mjs`](../apps/agent/lease-config.mjs)
-- Buildpack ACP bridge: [`buildpack-acp.js`](../integrations/agent/buildpack-acp.js)
-- Read-only MCP tool example: [`apps/pilot-mcp/server.mjs`](../apps/pilot-mcp/server.mjs)
+- Relay service binding resolution: [`apps/relay/bindings.mjs`](../../../apps/relay/bindings.mjs)
+- OIDC session, human assertion, and agent grant handlers: [`apps/identity/src/server.mjs`](../../../apps/identity/src/server.mjs)
+- Internal JWKS mTLS endpoints: [`server.mjs`](../../../integrations/cf-mtls/server.mjs), [`proxy.mjs`](../../../integrations/cf-mtls/proxy.mjs)
+- Worker launcher, lease supervisor, and advisory lock: [`launch.mjs`](../../../apps/agent/launch.mjs), [`worker.mjs`](../../../apps/agent/worker.mjs), [`lease.mjs`](../../../apps/agent/lease.mjs), [`lease-config.mjs`](../../../apps/agent/lease-config.mjs)
+- Buildpack ACP bridge: [`buildpack-acp.js`](../../../integrations/agent/buildpack-acp.js)
+- Read-only MCP tool example: [`apps/pilot-mcp/server.mjs`](../../../apps/pilot-mcp/server.mjs)

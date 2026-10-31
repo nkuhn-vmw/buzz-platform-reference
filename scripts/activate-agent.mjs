@@ -6,6 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { loadDeployment, root } from './lib/config.mjs';
 import { cf, runCF, verifyLocalTarget } from './lib/cf.mjs';
 import { manifests } from './render.mjs';
+import { publishAgentProfile, publishAgentPolicy } from './lib/agent-profile.mjs';
 
 const agentPattern = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 const ACTIVE_TASK_STATES = new Set(['PENDING', 'RUNNING', 'CANCELING']);
@@ -224,11 +225,14 @@ function waitForStartedTask(deployment, taskGuid, taskName) {
   throw new Error(`CF Task ${taskName} was not visible after it was requested; inspect app tasks before retrying`);
 }
 
-export function activate(args = process.argv.slice(2)) {
+export async function activate(args = process.argv.slice(2)) {
   const { agent } = parseArgs(args);
   const deployment = loadDeployment();
   const target = verifySpace(deployment);
   const local = loadEnrollmentFiles(deployment.credentialsDir, agent);
+  const owner = readPrivateJson(join(deployment.credentialsDir, 'pilot-owner.json'), 'pilot owner key');
+  const session = readPrivateJson(join(deployment.credentialsDir, 'operator-session.json'), 'operator SSO session');
+  if (owner.pubkey !== local.ownerPubkey || session.base !== deployment.identityOrigin) throw new Error('Operator session does not match the enrolled owner and configured issuer');
   const serviceName = identityServiceFor(agent);
   const appName = appNameFor(agent);
   const bindingPath = join(deployment.credentialsDir, 'agents', agent, 'agent-identity.json');
@@ -252,6 +256,20 @@ export function activate(args = process.argv.slice(2)) {
   assertNoActiveTask(deployment, pushedApp.guid, appName);
   if (configured.runtime === 'tanzu') ensureNativePolicy(deployment, appName, target.spaceGuid);
 
+  await publishAgentProfile({
+    relayUrl: deployment.relayUrl, identityOrigin: deployment.identityOrigin,
+    binding: local.binding, agentPubkey: local.agentPubkey, ownerPubkey: local.ownerPubkey,
+    displayName: configured.app.env.BUZZ_ACP_DISPLAY_NAME,
+  });
+
+  await publishAgentPolicy({
+    relayUrl: deployment.relayUrl, identityOrigin: deployment.identityOrigin,
+    owner, session, agentPubkey: local.agentPubkey,
+    displayName: configured.app.env.BUZZ_ACP_DISPLAY_NAME,
+    respondTo: configured.app.env.BUZZ_ACP_RESPOND_TO,
+    allowlist: configured.app.env.BUZZ_ACP_RESPOND_TO_ALLOWLIST?.split(',') ?? [],
+  });
+
   const taskName = `agent-${agent}`;
   const task = apiJson(deployment, `/v3/apps/${encodeURIComponent(pushedApp.guid)}/tasks`, 'POST', {
     name: taskName, command: 'node launch.mjs', memory_in_mb: 1024, disk_in_mb: 2048,
@@ -263,6 +281,6 @@ export function activate(args = process.argv.slice(2)) {
 }
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
-  try { activate(); }
+  try { await activate(); }
   catch (error) { console.error(error.message); process.exitCode = 1; }
 }

@@ -40,4 +40,46 @@ Channel membership governs access to that channel. Joining a project does not au
 
 An explicit mention selects one agent; other agents do not reply automatically. The agent must be admitted by its author policy and have access to the channel. The default hosted configuration admits its owner only. An operator may allow specific verified Buzz public keys; a teammate's channel membership alone does not bypass that policy. See [Agents in Buzz](agents.md) for ownership and [Using Buzz with your team](using-buzz.md) for details.
 
-The sign-in image shows the profile settings entry point before email or account details are displayed; it is not evidence that SSO completed. The channel image shows the private-room creation form. A sanitized screenshot of mention autocomplete and an agent reply in its source thread remains to be captured; live Helper and Researcher replies are recorded in the [validation guide](tmm-validation.md).
+### Channel members
+
+<details>
+<summary>View screenshot</summary>
+
+![The project channel includes Workshop Operator, Buzz Researcher, and Platform Helper](assets/channel-members.jpg)
+
+</details>
+
+### Choose an agent by name
+
+Type `@` and choose the hosted agent from the suggestions. In this example, **Platform Helper** uses the Tanzu Agent Buildpack, while **Buzz Researcher** uses the Buzz built-in runtime.
+
+<details>
+<summary>View screenshot</summary>
+
+![Desktop mention suggestions list Platform Helper and Buzz Researcher by name](assets/agent-mentions.jpg)
+
+</details>
+
+### Hosted agent reply
+
+The desktop sent this request to Platform Helper, which called the protected architecture tool through MCP Gateway and replied in the source thread. The displayed request nonce matched the backend tool log. The older message retains the shortened public-key label used before the agent profile was registered; the reply now displays the configured name.
+
+<details>
+<summary>View screenshot</summary>
+
+![A real desktop request and Platform Helper response in its original thread](assets/agent-thread.jpg)
+
+</details>
+
+### Built-in Researcher reply
+
+The same desktop flow also works with the Buzz built-in runtime. This real request selected **Buzz Researcher** from the mention picker; its tool nonce matched the backend log.
+
+<details>
+<summary>View screenshot</summary>
+
+![A real Buzz Researcher reply in the thread where it was invoked](assets/researcher-thread.jpg)
+
+</details>
+
+The sign-in image shows the entry point before account details are displayed; it is not a sign-in success receipt. The channel image shows the private-room creation form. The [validation guide](tmm-validation.md) separates verified live behavior from remaining pilot checks.

@@ -24,7 +24,7 @@ The deployment uses platform service bindings for persistence, identity, model a
 
 ## Validation status
 
-This source tree is a pilot reference. In a private pilot, operator/desktop SSO, channel message persistence, and live owner-authorized Helper (Tanzu) and Researcher (Buzz built-in) turns through the read-only Gateway tool have succeeded. The worker PostgreSQL connection verified TLS 1.3 and its certificate in a CF Task. Multi-human allowlist behavior, live grant-expiry timing, signed desktop distribution, and final desktop agent-thread capture remain unverified. See the [validation guide](docs/tmm-validation.md) for evidence boundaries; these results do not establish whole-pilot acceptance or a public service.
+This source tree is a pilot reference. In a private pilot, operator/desktop SSO, channel message persistence, and live owner-authorized Helper (Tanzu) and Researcher (Buzz built-in) turns through the read-only Gateway tool have succeeded. The worker PostgreSQL connection verified TLS 1.3 and its certificate in a CF Task. The real desktop request and source-thread reply were also verified and captured. Multi-human allowlist behavior, live grant-expiry timing, and signed desktop distribution remain unverified. See the [validation guide](docs/tmm-validation.md) for evidence boundaries; these results do not establish whole-pilot acceptance or a public service.
 
 ## Start here
 
@@ -39,7 +39,9 @@ This source tree is a pilot reference. In a private pilot, operator/desktop SSO,
 
 ## Screenshots
 
-The [getting-started guide](docs/getting-started.md) includes authentic screenshots of the desktop sign-in entry point and private channel creation form. The agent-thread screenshot is pending capture; live turns have been verified separately as recorded in the validation guide.
+The [getting-started guide](docs/getting-started.md) includes authentic desktop screenshots of sign-in, private channel creation, channel membership, and a live hosted-agent reply.
+
+[![A real desktop conversation with the hosted Platform Helper](docs/assets/agent-thread.jpg)](docs/getting-started.md#hosted-agent-reply)
 
 ## Contributing and security
 

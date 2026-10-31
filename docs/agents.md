@@ -85,6 +85,13 @@ step is one-time per relay. `helper` uses the
 `buzz-agent` app and `buzz-agent-identity` service. Another name creates an
 independent `buzz-agent-NAME` CF app and `buzz-agent-identity-NAME` CredHub
 service; PostgreSQL lease ownership is keyed by that agent's public key.
+Activation publishes the agent-signed display-name profile and an owner-signed
+directory policy so the hosted identity is discoverable in desktop mentions.
+It uses the configured response policy and the current operator SSO session.
+The profile is an operator-owned snapshot: activating replaces its profile
+with the configured display name, so do not maintain separate avatar/about
+metadata on that identity. Channel membership is still a separate invitation.
+
 Enrollment and activation artifacts stay in ignored `.credentials/`. To
 revoke future assertions, run
 `node apps/identity/tools/enroll-agent.mjs --agent NAME --revoke`; terminate
@@ -145,7 +152,6 @@ the Buzz chat bridge is not implemented end to end.
 
 ## Screenshots
 
-See [the getting-started guide](getting-started.md) for the authentic
-pre-sign-in screen and private channel form. The agent directory/mention
-autocomplete, channel membership, and live agent reply inside its source
-thread still need sanitized capture; no placeholder image links are used.
+See [the getting-started guide](getting-started.md) for authentic captures of
+the pre-sign-in screen, private channel form, channel membership, and a live
+agent reply inside its source thread.

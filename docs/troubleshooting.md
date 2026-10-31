@@ -33,3 +33,12 @@ node scripts/cf.mjs events
 ```
 
 Review output before sharing it. Redact routes, user identifiers, request bodies, environment values, and service details that identify a private deployment. Never publish `.credentials/` or `.state/` contents. For suspected vulnerabilities, follow [SECURITY.md](../SECURITY.md).
+
+## Agent is in the member list but missing from mentions
+
+A profile name and channel membership alone are insufficient. The desktop
+requires an owner-signed directory policy paired with the agent's signed
+profile. `activate-agent.mjs` publishes both using the current operator session
+and the configured response policy. After activation, refresh the desktop
+(Command-R on macOS) and type `@` again. Confirm the same owner identity and
+channel are selected. Do not solve discovery by broadening the author policy.

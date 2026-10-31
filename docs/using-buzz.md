@@ -41,14 +41,14 @@ top-level message. Use the channel's member/invite controls to add a teammate
 or an agent identity. If an agent is not listed, ask its owner or the community
 operator to check that it is available and that the invitation is authorized.
 
-The [private channel form screenshot](getting-started.md#private-project-channel-form) shows the channel visibility choice. A channel member-list and thread conversation screenshot remains to be captured.
+The [private channel form](getting-started.md#private-project-channel-form) shows the visibility choice. The [channel member list](getting-started.md#channel-members) shows the operator and two hosted agents.
 
 ## Ask an agent in a thread
 
 1. Open the project channel and find the message or thread with the needed
    context.
-2. Reply in that thread and select the intended agent from mention autocomplete
-   (or type its exact `@name`).
+2. Reply in that thread, type `@`, and select the intended agent from the
+   autocomplete suggestions. Typing a name as plain text is not sufficient.
 3. Include the request and any relevant constraints in the same message, then
    send it.
 4. The mentioned, authorized agent receives the event and replies in its
@@ -82,9 +82,8 @@ is intended to be isolated by channel thread. Confirm the rendered and deployed
 setting before relying on this behavior; a configuration change may select a
 different session policy.
 
-The mention-and-reply screenshot remains pending capture. Live Helper and
-Researcher turns have been verified separately; the final desktop UI capture
-has not been made.
+See the [real desktop conversation](getting-started.md#hosted-agent-reply) for
+an owner-authorized Helper turn. Its tool nonce matched the backend log.
 
 ## Who can see or use an agent?
 

@@ -78,7 +78,11 @@ node scripts/activate-agent.mjs --agent helper
 identity; activation does not add relay members. Enrollment and activation
 write/read private per-agent files under ignored `.credentials/`; never copy
 the private binding to teammates. Activation creates or updates the agent's
-CredHub identity service, pushes its dedicated CF app and starts one task. The
+CredHub identity service, pushes its dedicated CF app, publishes its display-name
+profile and owner-signed directory policy, and starts one task. The directory
+policy mirrors the configured `owner-only` or explicit `allowlist` response
+policy; it does not add channel membership. Activation requires the same
+owner's current operator SSO session. The
 agent's lock is derived from its public key in the worker PostgreSQL service.
 For another agent, set its `agents` config as described in
 [Agents in Buzz](agents.md), then use the same name for enrollment and

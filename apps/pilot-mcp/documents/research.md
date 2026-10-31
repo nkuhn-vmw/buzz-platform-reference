@@ -130,7 +130,7 @@ change or release the OpenCode buildpack.
 
 ## References
 
-- Candidate adapters: [`buildpack-acp.js`](../integrations/agent/buildpack-acp.js), [`bindings.js`](../integrations/agent/bindings.js), [`mcp-http-stdio.js`](../integrations/agent/mcp-http-stdio.js)
-- Candidate launcher and task worker: [`apps/agent/launch.mjs`](../apps/agent/launch.mjs), [`apps/agent/worker.mjs`](../apps/agent/worker.mjs)
+- Candidate adapters: [`buildpack-acp.js`](../../../integrations/agent/buildpack-acp.js), [`bindings.js`](../../../integrations/agent/bindings.js), [`mcp-http-stdio.js`](../../../integrations/agent/mcp-http-stdio.js)
+- Candidate launcher and task worker: [`apps/agent/launch.mjs`](../../../apps/agent/launch.mjs), [`apps/agent/worker.mjs`](../../../apps/agent/worker.mjs)
 - OpenCode [ACP documentation](https://opencode.ai/docs/acp/), [server documentation](https://opencode.ai/docs/server/), [configuration](https://opencode.ai/docs/config/)
 - The local OpenCode Buildpack README and configuration reference informed the packaging assessment. Its availability is separate from the OpenCode ACP/server interfaces above; this candidate does not depend on it.
