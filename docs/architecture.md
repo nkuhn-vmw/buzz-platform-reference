@@ -108,8 +108,10 @@ private pilot verified Helper and Researcher worker turns and TLS 1.3 with a
 verified certificate in the Helper's worker PostgreSQL connection. It also
 verified duplicate-task refusal and a controlled Helper restart. The diagram
 describes the wider intended task contract; it does not establish every edge
-as live-tested. In particular, live grant-expiry timing remains untested and
-TLS is not claimed for the unchanged relay and identity PostgreSQL instances.
+as live-tested. An isolated CF Task verified shutdown at the configured
+worker deadline with synthetic child processes, not an issuer-expired grant
+in a Buzz conversation. TLS is not claimed for the unchanged relay and
+identity PostgreSQL instances.
 
 ## Team and thread workflow
 
@@ -138,7 +140,7 @@ remain conversation-scoped.
 | --- | --- | --- |
 | Relay | PostgreSQL event store, S3-compatible object storage, Valkey-compatible Redis, CredHub-backed secrets | Rendered bindings, routes, and service policy in the target space |
 | Identity | OIDC login, scoped agent grants, signed NIP-FI assertions, dedicated PostgreSQL state | Real SSO, allow/deny behavior, key rotation, and mTLS JWKS on the target deployment |
-| Agent | Helper/Tanzu and Researcher/built-in owner-authorized turns, worker PostgreSQL TLS 1.3 certificate verification, duplicate-task refusal, controlled restart | Two-human allowlist, live grant-expiry timer, relay/identity database TLS, and full signed desktop distribution |
+| Agent | Helper/Tanzu and Researcher/built-in owner-authorized turns, worker PostgreSQL TLS 1.3 certificate verification, duplicate-task refusal, controlled restart, live configured-deadline canary | Two-human allowlist, issuer-expired grant in a real conversation, relay/identity database TLS, and full signed desktop distribution |
 | Desktop | Local OIDC browser handoff and OS credential-store session handling | Signed/notarized distribution and a sanitized end-user onboarding run |
 | Credential Store | Optional native Buildpack support for outbound SSO credential forwarding | Per-user delegation through the Buzz ACP runtime is not implemented end to end |
 
