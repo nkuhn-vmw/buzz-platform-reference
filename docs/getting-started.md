@@ -97,6 +97,6 @@ not evidence of a second desktop installation.
 <details>
 <summary>View the shared-thread screenshot</summary>
 
-![A real shared Buzz thread with Workshop Helper, a second participant, and the operator's desktop follow-up](assets/shared-workshop-thread.png)
+![A real shared Buzz thread with Workshop Helper, a second participant, and the operator's desktop follow-up](assets/shared-workshop-thread.jpg)
 
 </details>
