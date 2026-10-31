@@ -27,6 +27,8 @@ As of 2026-10-31, the private pilot has verified owner-authorized agent turns in
 
 These results do not amount to whole-pilot acceptance. Keep unrun scenarios visible and do not convert source, fixture, or CI evidence into claims of live behavior.
 
+The [workshop rehearsal guide](workshop.md) defines the two-person success/denial checks and separate Credential Store acceptance criteria. Its procedure is not a live test result.
+
 ## Focused deployment checks
 
 For the native model/Gateway path, the repository probe is:

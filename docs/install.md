@@ -97,6 +97,8 @@ node scripts/deploy.mjs status
 
 The probe exercises the native adapter, model, and read-only MCP tool path. It does not validate multiple human accounts, production readiness, or all authorization/lifecycle cases. Record those separately using [the validation guide](tmm-validation.md).
 
+For attendees, use the [workshop onboarding procedure](workshop.md#admit-an-ordinary-participant), which grants ordinary relay membership and keeps each participant's SSO session and desktop key separate from the operator.
+
 ## Screenshots for the install guide
 
 The [getting-started guide](getting-started.md) shows the authentic profile sign-in entry point and private channel form. An operator configuration/plan screenshot and a signed installer screenshot have not been captured. Never publish `.credentials/`, private keys, bearer tokens, OIDC authorization codes, or service binding values.
