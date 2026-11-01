@@ -6,6 +6,7 @@
   "routePrefix": "buzz-demo",
   "stack": "cflinuxfs4",
   "agentStack": "cflinuxfs4",
+  "databaseTls": true,
   "model": "YOUR_CHAT_MODEL_ID",
   "oidcIssuer": "https://YOUR_SSO_ZONE.uaa.sys.example.invalid/oauth/token",
   "identityProvider": "YOUR_IDENTITY_PROVIDER",

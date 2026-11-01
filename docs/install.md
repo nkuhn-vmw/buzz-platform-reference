@@ -20,6 +20,22 @@ cp config/deployment.example.json .state/deployment.json
 
 Edit `.state/deployment.json` with the target API, org, space, domain, route prefix, model, SSO values, desktop profile, and actual service offering/plan names. Keep this file and `.credentials/` local. Do not commit credentials, generated parameters, or rendered manifests.
 
+For a new TLS-enabled PostgreSQL deployment, keep `databaseTls: true` as in the
+template. It enables certificate-verified TLS for the identity adapter and the
+relay, including relay migrations. Trust comes from the named database binding
+(`ca`, `ca_cert`, or `ca_certificate`) or the foundation's `CF_SYSTEM_CERT_PATH`
+file/directory. The apps refuse to start without trusted CA material; they do
+not disable certificate checks to connect. The worker already requires verified
+TLS independently. Existing configurations that omit `databaseTls` retain their
+previous core-database behavior; that compatibility does not establish TLS.
+
+Some brokers supply a PostgreSQL URI without SSL options even for a database
+that rejects plaintext connections. The adapter therefore configures TLS
+explicitly. It also removes URI SSL options before passing a separate trust
+object to node-postgres, whose URL parser otherwise replaces that object. See
+[node-postgres SSL configuration](https://node-postgres.com/features/ssl) and
+[SQLx PostgreSQL options](https://docs.rs/sqlx/latest/sqlx/postgres/struct.PgConnectOptions.html).
+
 Select the target through the repository wrapper, which uses a dedicated local CF home and verifies the configured API/org/space:
 
 ```sh

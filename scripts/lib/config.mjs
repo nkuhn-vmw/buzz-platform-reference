@@ -12,6 +12,7 @@ function origin(value, label) {
 export function loadDeployment(file = process.env.BUZZ_DEPLOYMENT_CONFIG || resolve(root, '.state/deployment.json')) {
   const configPath = resolve(file);
   const c = JSON.parse(readFileSync(configPath, 'utf8'));
+  if (c.databaseTls !== undefined && typeof c.databaseTls !== 'boolean') throw new Error('databaseTls must be a boolean');
   for (const field of ['org', 'space', 'stack', 'model', 'oidcIssuer', 'identityProvider']) {
     if (typeof c[field] !== 'string' || !c[field].trim() || /[\r\n\0]/.test(c[field])) throw new Error(`Missing or invalid ${field}`);
   }

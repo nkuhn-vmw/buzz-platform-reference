@@ -1,6 +1,20 @@
 import { createPrivateKey, createPublicKey } from 'node:crypto';
 import { calculateJwkThumbprint } from 'jose';
 import { parseAllowedEmails } from './allowlist.mjs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+
+function postgresTls(credentials, caPath) {
+  let ca = credentials.ca || credentials.ca_cert || credentials.ca_certificate;
+  if (!ca && caPath) {
+    try {
+      ca = statSync(caPath).isDirectory()
+        ? readdirSync(caPath).filter(name => /\.(pem|crt|cer)$/i.test(name)).sort().map(name => readFileSync(`${caPath}/${name}`, 'utf8')).join('\n')
+        : readFileSync(caPath, 'utf8');
+    } catch { throw new Error('Unable to read PostgreSQL CA trust'); }
+  }
+  if (typeof ca !== 'string' || !ca.includes('-----BEGIN CERTIFICATE-----') || !ca.includes('-----END CERTIFICATE-----')) throw new Error('PostgreSQL CA trust is required for verified TLS');
+  return { ca, rejectUnauthorized: true };
+}
 
 function validObject(value) { return value && typeof value === 'object' && !Array.isArray(value); }
 
@@ -17,13 +31,23 @@ function bindingsFrom(services) {
   return result;
 }
 
-function firstPostgresBinding(bindings) {
+function firstPostgresBinding(bindings, env) {
   const found = bindings.find(({ item }) => item.name === 'buzz-identity-db');
   if (!found) throw new Error('buzz-identity-db PostgreSQL service binding is required');
   const c = found.item.credentials;
+  if (env.BUZZ_DATABASE_REQUIRE_TLS !== undefined && !['true', 'false'].includes(env.BUZZ_DATABASE_REQUIRE_TLS)) throw new Error('BUZZ_DATABASE_REQUIRE_TLS must be true or false');
+  const ssl = env.BUZZ_DATABASE_REQUIRE_TLS === 'true' ? postgresTls(c, env.CF_SYSTEM_CERT_PATH) : undefined;
   const uri = c.uri ?? c.jdbcUrl;
   if (typeof uri === 'string' && (uri.startsWith('postgres://') || uri.startsWith('postgresql://') || uri.startsWith('jdbc:postgresql://'))) {
-    return { connectionString: uri.startsWith('jdbc:') ? uri.slice('jdbc:'.length) : uri };
+    const connectionString = uri.startsWith('jdbc:') ? uri.slice('jdbc:'.length) : uri;
+    if (!ssl) return { connectionString };
+    const parsed = new URL(connectionString);
+    // node-postgres replaces the explicit ssl object if these URL options
+    // remain. Preserve other connection parameters, but enforce our trust.
+    for (const key of [...parsed.searchParams.keys()]) {
+      if (key.toLowerCase().startsWith('ssl') || key === 'uselibpqcompat') parsed.searchParams.delete(key);
+    }
+    return { connectionString: parsed.href, ssl };
   }
   const firstHost = Array.isArray(c.hosts) ? (typeof c.hosts[0] === 'string' ? c.hosts[0] : c.hosts[0]?.host) : undefined;
   const config = {
@@ -33,7 +57,8 @@ function firstPostgresBinding(bindings) {
     user: c.username ?? c.user,
     password: c.password,
   };
-  if (c.ca) config.ssl = { ca: c.ca, rejectUnauthorized: true };
+  if (ssl) config.ssl = ssl;
+  else if (c.ca) config.ssl = { ca: c.ca, rejectUnauthorized: true };
   else if (c.ssl === true || c.sslmode === 'require') config.ssl = { rejectUnauthorized: true };
   if (!config.host || !config.database || !config.user || typeof config.password !== 'string' || !Number.isFinite(config.port)) throw new Error('Invalid PostgreSQL credentials');
   return config;
@@ -80,7 +105,7 @@ export async function loadConfig(env = process.env) {
   if (!alg) throw new Error('Signing key must be RSA or P-256 EC');
   const kid = signingJwk.kid ?? await calculateJwkThumbprint(publicJwk);
   const oidc = firstIdentityBinding(bindings);
-  const pg = firstPostgresBinding(bindings);
+  const pg = firstPostgresBinding(bindings, env);
   const relayValues = (env.RELAY_URLS ?? '').split(',').map((v) => v.trim()).filter(Boolean);
   if (!relayValues.length) throw new Error('RELAY_URLS is required');
   const fiIssuer = env.NIP_FI_ISSUER ?? publicBase.origin;

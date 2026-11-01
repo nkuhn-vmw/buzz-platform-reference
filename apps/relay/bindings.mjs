@@ -1,3 +1,29 @@
+import { readFileSync, readdirSync, statSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+function verifiedDatabaseUrl(database, credentials, env) {
+  if (env.BUZZ_DATABASE_REQUIRE_TLS !== undefined && !['true', 'false'].includes(env.BUZZ_DATABASE_REQUIRE_TLS)) throw new Error('BUZZ_DATABASE_REQUIRE_TLS must be true or false');
+  if (env.BUZZ_DATABASE_REQUIRE_TLS !== 'true') return database;
+  let ca = credentials.ca || credentials.ca_cert || credentials.ca_certificate;
+  const path = env.CF_SYSTEM_CERT_PATH;
+  if (!ca && path) {
+    try {
+      ca = statSync(path).isDirectory()
+        ? readdirSync(path).filter(name => /\.(pem|crt|cer)$/i.test(name)).sort().map(name => readFileSync(join(path, name), 'utf8')).join('\n')
+        : readFileSync(path, 'utf8');
+    } catch { throw new Error('Unable to read PostgreSQL CA trust'); }
+  }
+  if (typeof ca !== 'string' || !ca.includes('-----BEGIN CERTIFICATE-----') || !ca.includes('-----END CERTIFICATE-----')) throw new Error('PostgreSQL CA trust is required for verified TLS');
+  const directory = mkdtempSync(join(tmpdir(), 'buzz-postgres-ca-'));
+  const caFile = join(directory, 'root.crt');
+  writeFileSync(caFile, ca, { mode: 0o600, flag: 'wx' });
+  const uri = new URL(database);
+  uri.searchParams.set('sslmode', 'verify-full');
+  uri.searchParams.set('sslrootcert', caFile);
+  return uri.href;
+}
+
 export function relayEnvironment(env) {
   const bindings = Object.values(JSON.parse(env.VCAP_SERVICES || '{}')).flat();
   const credentials = (name) => {
@@ -14,7 +40,7 @@ export function relayEnvironment(env) {
   const redis = new URL(`redis://${cache.host}:${cache.port}`);
   redis.password = cache.password;
   const required = {
-    DATABASE_URL: database,
+    DATABASE_URL: verifiedDatabaseUrl(database, db, env),
     REDIS_URL: redis.href,
     BUZZ_S3_ENDPOINT: objects.endpoint_url || objects.endpoint,
     BUZZ_S3_ACCESS_KEY: objects.access_key,
