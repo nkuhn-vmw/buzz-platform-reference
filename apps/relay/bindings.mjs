@@ -19,6 +19,10 @@ function verifiedDatabaseUrl(database, credentials, env) {
   const caFile = join(directory, 'root.crt');
   writeFileSync(caFile, ca, { mode: 0o600, flag: 'wx' });
   const uri = new URL(database);
+  // SQLx accepts hyphenated aliases; remove every supplied TLS option first.
+  for (const key of [...uri.searchParams.keys()]) {
+    if (key.toLowerCase().startsWith('ssl')) uri.searchParams.delete(key);
+  }
   uri.searchParams.set('sslmode', 'verify-full');
   uri.searchParams.set('sslrootcert', caFile);
   return uri.href;
