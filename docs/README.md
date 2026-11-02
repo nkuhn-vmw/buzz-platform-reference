@@ -1,6 +1,13 @@
 # Documentation
 
+Start with [client status and the facilitator-first path](client-status.md). The
+current official beta/plugin compatibility result is separate from the earlier
+SSO desktop and hosted-agent evidence.
+
 ## Operators
+
+- [Current client status](client-status.md)
+- [Facilitator workshop and later participant acceptance](workshop.md)
 
 - [Install and deploy the reference](install.md)
 - [Validate a deployment](tmm-validation.md)

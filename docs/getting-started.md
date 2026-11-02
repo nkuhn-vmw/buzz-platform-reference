@@ -1,20 +1,37 @@
 # Getting started
 
-This is the team-member guide for a Buzz community that an operator has already deployed and distributed. Ask your operator for the signed client distribution, community address, organization sign-in instructions, project channel, and approved agent names. This repository does not host a community or provide public account registration.
+Start with a **facilitator-led session**: bring two approved non-confidential
+questions, ask the facilitator to mention the intended agent, follow up in the
+same thread, and record expected versus actual results. You do not need to
+install a client for this first evaluation. See the [workshop agenda](workshop.md).
 
-The reference pilot does not yet have a signed attendee build. These attendee
-installation steps begin only after your operator supplies an approved signed
-distribution; the current local facilitator build is not that installer.
+The chosen independent Mac path is the official Buzz client plus a Tanzu plugin.
+The beta/plugin passed synthetic compatibility checks, but native SSO configuration
+and fresh-install onboarding are not ready for this pilot. The
+[client-status guide](client-status.md) tracks the generic upstream PR and gates.
+Wait for your operator's verified official release, community, SSO instructions
+and invitations. This repository does not host a community or public registration.
 
 ## Join a project conversation
 
-1. Install the Buzz app supplied by your organization and open Settings → Profile.
-2. Select the platform sign-in action to connect the desktop identity to the configured identity service. Complete the organization's SSO flow in the browser.
-3. Connect to the community address supplied by the operator and sign in with the organization's Buzz identity if prompted.
-4. Join the project channel using its invitation or directory listing. If you are authorized to create a room, choose a private channel and invite only the intended people and agents.
-5. Start a channel message for a new topic. Reply to an existing message to continue that topic in its thread.
+These steps apply **after the official-client gate passes**; exact first-run menus
+must be verified against that release. The screenshots below are from the earlier
+custom facilitator desktop, not official-beta installation instructions.
+
+1. Install the operator-approved official release and reviewed plugin using the
+   supplied instructions. Create your own Buzz identity; do not copy the operator's profile.
+2. Complete the configured organization's SSO flow. Have the operator verify your
+   account and Buzz public key through a trusted channel; never share a private key or token.
+3. The operator admits ordinary relay membership, invites you to the project
+   channel, and explicitly approves access to any shared agent. SSO alone grants none of these.
+4. Connect to the supplied community and channel. If authorized to create a room,
+   choose a private channel and invite only intended people and agents.
+5. Start a channel message for a new topic. Reply to an existing message to continue its thread.
 
 ### Desktop sign-in entry point
+
+Historical facilitator build: this platform sign-in action is not supplied by the
+current official beta or by the plugin.
 
 <details>
 <summary>View screenshot</summary>

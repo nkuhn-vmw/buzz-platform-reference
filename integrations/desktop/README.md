@@ -1,12 +1,17 @@
 # Native desktop identity integration
 
+**Legacy facilitator integration.** This patch preserves the earlier verified
+pilot flow; it is not the selected attendee installation path. That direction
+is official Buzz plus a plugin, pending the generic native configuration PR
+and fresh-install SSO validation. See [client status](../../docs/client-status.md).
+
 This reference patch adds native NIP-FA sign-in and short lived NIP-FI assertions to the pinned Buzz desktop source. Identity assertions are requested for the configured relay origin and are sent only to that exact origin. Relay, media, and voice requests keep their existing relay authorization and add the federation assertion only for the configured relay. Identity sessions stay in the operating system credential store; keychain item names include the configured desktop profile so separate installations do not read or clear one another's sessions. Keychain I/O remains bounded.
 
 ## Build an isolated macOS app
 
-1. Create the operator deployment config using `docs/deployment.md` and validate it with `node scripts/preflight.mjs`.
+1. Create the operator deployment config using [the installation guide](../../docs/install.md) and validate it with `node scripts/preflight.mjs`.
 2. Run `scripts/build-desktop.sh`. It checks out the pinned upstream commit in a temporary directory, verifies the patch applies cleanly, injects the validated identity and relay origins, and overrides the app name and bundle identifier from the deployment config.
-3. The app, which is not developer signed or notarized, and `BUILD-INFO.txt` are written under `artifacts/desktop/<profile>/`. The linker may leave ad-hoc signatures, but the build does not apply a developer signature or notarize the app. Sign and notarize it through your organization's normal macOS release process before distributing it.
+3. The app, which is not developer signed or notarized, and `BUILD-INFO.txt` are written under `artifacts/desktop/<profile>/`. The linker may leave ad-hoc signatures, but the build does not apply a developer signature or notarize the app. Retain it for the existing facilitator rehearsal; do not distribute it to attendees under the current pilot plan. A different distribution plan would need its own signing, notarization and installation acceptance.
 
 The builder requires macOS, Git, Node.js, pnpm, Rust, Xcode command line tools, and network access for the upstream source and JavaScript dependencies. It builds the upstream desktop sidecars from the same pinned checkout before packaging. Set `BUZZ_UPSTREAM_SOURCE` to a clean checkout at the pinned revision to use a local source mirror. Set `BUZZ_CARGO_TARGET_DIR` to a Rust cache directory if desired. The script refuses an existing output path and leaves source checkouts unchanged.
 

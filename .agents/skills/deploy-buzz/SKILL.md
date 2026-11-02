@@ -13,7 +13,7 @@ Use the repository scripts and the configured isolated CF target. Read `docs/ins
 2. Copy the example config to ignored `.state/deployment.json`; do not read aloud, copy, or commit credentials or generated state.
 3. Run `scripts/cf-login.sh`, then `node scripts/cf.mjs --verify-target`.
 4. Review `node scripts/provision.mjs --plan`. Only apply when its target and plan inventory match the intended space: `node scripts/provision.mjs --apply --wait`.
-5. Build/package the pinned Linux/amd64 worker with `scripts/build-agent.sh`, package relay and identity, and (on macOS) build desktop using the commands in `docs/install.md`.
+5. Build/package the pinned Linux/amd64 worker with `scripts/build-agent.sh`, then package relay and identity using `docs/install.md`. Read `docs/client-status.md`: the desktop builder is legacy facilitator tooling, not the selected attendee path. Official-client native SSO and fresh-install acceptance remain separate gates.
 6. Run `node scripts/deploy.mjs prepare-apps`, then the documented deploy steps in dependency order. Inspect generated manifests locally before pushing.
 7. Run `node scripts/login.mjs`, enroll with `node apps/identity/tools/enroll-agent.mjs --agent NAME`, admit the shared owner once per relay with `node scripts/deploy.mjs admit-owner`, then activate with `node scripts/activate-agent.mjs --agent NAME`. Keep per-agent config in ignored `.state/deployment.json`; require a worker PostgreSQL service with verified TLS.
 8. Run `node scripts/deploy.mjs probe` and `node scripts/deploy.mjs status`; report exactly what was and was not verified.

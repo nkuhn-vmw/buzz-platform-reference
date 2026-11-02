@@ -7,31 +7,20 @@ Buzz community, so a useful answer stays with its discussion.
 
 ## Installation and first sign-in
 
-This repository is a deployment reference, not an end-user installer. The
-operator first deploys the relay and identity service, configures the desktop
-client for that relay, and provides a signed desktop build through the team's
-approved distribution route. Follow the operator's release link and
-organization sign-in instructions; never put a relay secret or an agent key in
-the client configuration.
+Begin with a facilitator-led session on the existing verified desktop. Bring
+approved non-confidential questions, select an agent with the facilitator and
+record results; no attendee installation is required for this first evaluation.
 
-The reference pilot's signed attendee build is still pending. Follow these steps
-after your operator provides that distribution; the local facilitator build is
-not an attendee installation path.
+The independent Mac direction is the official Buzz client plus a Tanzu plugin.
+Wait for your operator's verified official release, native SSO configuration and
+fresh-install instructions. The current beta/plugin compatibility result does
+not provide that SSO path. [Client status](client-status.md) tracks the gates.
 
-After installing the signed client:
-
-1. Open Buzz and connect to the community address provided by your operator.
-2. Sign in with the organization's identity provider when prompted.
-3. Join the project channel using the invite or channel directory supplied by
-   your team.
-4. Open the channel and post a message. Reply to a message to keep a discussion
-   in its thread.
-
-The operator must supply the distribution link, community address, and any
-invite before this section can serve as a deployment-specific installation
-guide. Do not substitute private pilot links in this public reference.
-
-For the sign-in entry point, see the [desktop profile screenshot](getting-started.md#desktop-sign-in-entry-point). It shows the pre-sign-in state and is not a sign-in success receipt.
+After that acceptance, each person creates their own Buzz identity, signs in
+through the configured SSO provider, and obtains ordinary relay admission,
+channel invitations and explicit shared-agent access. Do not copy the operator's
+profile or put secrets in client configuration. Follow [Getting started](getting-started.md)
+for the future onboarding sequence and labeled historical screenshots.
 
 ## Share a project room
 
@@ -106,7 +95,6 @@ are separate controls.
 
 The private pilot has verified two-user shared-room/allowlist behavior and
 private-channel denial. The second user's signed HTTP client used its own
-real SSO session and key; a second desktop's UX was not tested. Signed,
-generally available desktop distribution remains pending. Team members need
+real SSO session and key; a second desktop's UX was not tested. Official-client SSO and fresh-install acceptance remain pending. Team members need
 both channel access and an author policy that admits their messages. These
 results do not represent a public deployment.

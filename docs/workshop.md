@@ -1,19 +1,22 @@
 # TMM workshop facilitator guide
 
-This is the facilitator procedure for the deployed private pilot. The two-user
-shared-agent, channel-isolation, owner-only denial, logout, and native Credential
-Store A/B deletion sequence have passed. Signed attendee distribution remains
-pending; the second user's Buzz server checks used a separate signed HTTP
-client with real SSO. Track the exact limits in the [validation guide](tmm-validation.md).
+Run the first evaluation with the existing, authorized facilitator desktop;
+attendees join the meeting and review shared agent work without installing a
+custom Mac app. The earlier two-user server and native Credential Store tests
+passed, but the second Buzz identity used a signed HTTP client, not a second
+installed desktop. The selected attendee direction is official Buzz plus a
+Tanzu plugin. Native SSO and fresh-install acceptance remain pending; see
+[current client status](client-status.md) and [validation evidence](tmm-validation.md).
 
 ## Suggested live session
 
 | Segment | Demonstration | What to explain |
 | --- | --- | --- |
 | 5 minutes | Open the operator's Buzz desktop and project channel. | Local desktop, hosted relay, and independent human identities. |
-| 10 minutes | Mention Workshop Helper; after signed attendee distribution is available, have the approved second user follow up and start a new thread. Until then, show the recorded two-user rehearsal in the operator's desktop. | Channel membership, explicit agent selection, shared thread context, and separate topics. |
+| 10 minutes | Mention Workshop Helper; after official-client SSO and two-Mac acceptance pass, have the approved second user follow up and start a new thread. Until then, show the recorded two-user rehearsal in the operator's desktop. | Channel membership, explicit agent selection, shared thread context, and separate topics. |
 | 5 minutes | Contrast the shared helper with an existing owner-only agent and the private channel. | Reading a conversation does not grant permission to invoke an agent or access another channel. |
 | 10 minutes | Open the native companion in two browser profiles; show A/B receipts, remove A's entry, and call again as both users. | The tested foundation selects credentials by email across issuers. Use synthetic tokens only; this is separate from Buzz and is not subject isolation. |
+| 5 minutes, optional | Preview the official beta and private prototype plugin with a separate synthetic identity. | Readiness/messaging compatibility only; the plugin is not distributed here and cannot add native SSO trust. |
 | 5 minutes | Show the CF apps, tasks, bindings, and the recorded receipts. | Platform services and scoped access, plus the limits that still require production decisions. |
 
 Complete enrollment and sign-in before presenting. Keep grant expiry beyond
@@ -21,29 +24,63 @@ the session, and rehearse with synthetic data only. Use the [desktop screenshots
 and [credential screenshots](credential-companion.md#read-the-live-result) as
 explanations, not substitutes for a working deployment.
 
+## Start a facilitated session
+
+1. Select your existing private deployment configuration; run `node scripts/cf.mjs --verify-target`
+   and `node scripts/deploy.mjs status`. Confirm the intended environment before any renewal.
+2. Renew the owner's desktop SSO through the existing facilitator build's
+   [Platform sign-in](../integrations/desktop/README.md#first-launch). The operator's
+   terminal SSO session is separate: run `node scripts/login.mjs` and finish its
+   browser flow as the same owner when renewing agent grants.
+3. Inspect task states and print grant expiries with the commands below. For each
+   missing/expired worker, stop only its exact existing active task ID, wait until
+   no task is `PENDING`, `RUNNING` or `CANCELING`, then enroll and activate that
+   existing agent name. See [agent operation](agents.md); do not rerun `admit-owner`
+   or create a new identity for renewal.
+4. Confirm exactly one `RUNNING` task for each agent used in the session and grant
+   expiries beyond the session end. Keep the existing approved directory/author
+   audience; this renewal does not authorize adding participants.
+5. From the existing facilitator desktop, mention each demonstration agent in its
+   channel and require a source-thread reply with a tool nonce matching the backend
+   receipt. If it fails, resolve the cause before presenting.
+6. Record the dated preflight in the [validation template](tmm-validation.md#workshop-record-template).
+   Run the agenda above with meeting attendees; no attendee install or membership
+   change is needed for this session.
+
+For example, after stopping any active `buzz-agent` task and renewing owner SSO,
+renew the existing default Helper without changing its audience:
+
+```sh
+node apps/identity/tools/enroll-agent.mjs --agent helper
+node scripts/activate-agent.mjs --agent helper
+node scripts/cf.mjs tasks buzz-agent
+```
+
+Repeat only for other already-configured, approved agents using their matching
+name and app. Do not start a duplicate task when an existing task is healthy.
+
 ## Before inviting attendees
 
-The facilitator needs an operator-deployed community, two approved SSO accounts, and separate Buzz identities. Each attendee uses their own Mac and local keychain. Do not distribute the operator's `.credentials/` directory or use `scripts/launch-desktop.mjs` for attendees: that operator helper deliberately loads the pilot owner's identity.
+For the facilitated session, the operator needs an already verified community,
+owner desktop identity, current owner SSO and agent grants. Attendees need only
+approved synthetic questions and a way to record feedback. Rehearse a real
+agent/tool reply before inviting them. Never distribute `.credentials/` or the
+owner-loading `scripts/launch-desktop.mjs` helper to attendees.
 
-Provide attendees with the approved desktop download, community address, SSO instructions, project channel, and agent names through the organization's private distribution channel. The current pilot macOS artifact is unsigned and unnotarized. Resolve distribution with the organization's macOS administrator before a broad workshop; do not ask participants to disable Gatekeeper. Installation and first-use screenshots are in [Getting started](getting-started.md).
+For later independent use, complete the [official-client gates](client-status.md#before-independent-attendee-onboarding),
+then provide the verified official release, reviewed plugin, community address,
+SSO instructions, channels and agent names privately. Keep each Mac's identity and
+keychain separate. The earlier unsigned facilitator build is not the selected
+attendee distribution; do not ask users to disable Gatekeeper.
 
-There is no signed attendee download for this pilot yet. The existing
-facilitator desktop is a local pilot build; it is not an attendee installer.
-The second-desktop segment waits for an approved signed build and installation
-check. This guide does not authorize an unsigned-app exception such as
-**Open Anyway** or removing quarantine metadata. The recorded second-user
-rehearsal used an operator-run signed HTTP client and can be shown from the
-operator's desktop; it is not a public attendee client.
-
-For the native credential segment, provide each participant with their own
-approved foundation account, the cf CLI, OrgUser plus SpaceAuditor only in the
-synthetic companion space, the Store GUID/origin, and the participant management
-configuration described in [the companion guide](credential-companion.md#participant-management-commands).
-Add each approved email to the companion's `allowed-emails` as well as the Buzz
-identity allowlist. Deliver only that participant's disposable token through
-your approved private secret-transfer channel. Never send the combined backend
-key file. SpaceAuditor includes app-log access throughout the space; use only
-content and identifiers every workshop participant is authorized to see.
+The optional native credential segment uses only the two existing approved
+accounts and synthetic entries. Each account owner completes their own sign-in;
+keep the identities in separate browser profiles and do not share passwords or tokens. Additional Buzz email approvals do not grant CF
+roles or companion access. For a separately authorized new companion deployment,
+follow the [companion guide](credential-companion.md#participant-management-commands):
+verify the minimum scoped management role and deliver only each person's own
+synthetic credential privately. SpaceAuditor includes app-log visibility; do not
+put private user data in that shared test space.
 
 Check the exact API, org, and space, then inspect the deployed processes and tasks:
 
@@ -73,6 +110,10 @@ JS
 
 ## Admit an ordinary participant
 
+Run this only after the official-client installation/SSO gate passes and the
+participant and intended agent audience are authorized. It is not needed for
+meeting attendees watching the facilitator.
+
 1. Obtain explicit authorization for the participant's exact SSO email. Add only that address to the private deployment's `allowedEmails`, render and deploy the identity service using the [installation procedure](install.md). A successful SSO login does not itself admit a relay member or grant channel access.
 2. Have the participant sign in from their own Buzz desktop. Verify the selected account and obtain its Buzz public key over your trusted onboarding channel. Use the 64-character lowercase hex form. Keep it in private operations records; never request their secret key or login token.
 3. Admit that identity as an ordinary relay member:
@@ -100,7 +141,7 @@ Use synthetic project content. Save only labeled results and non-sensitive reque
 | Private-channel denial | Keep a second private channel visible only to A. Attempt a read of a known event and a post as B using B's authenticated client. | A can read the fixture. B's query returns an empty event array because the relay filters private events; B's write is rejected and the event is absent even from A's query. An empty channel list alone does not prove access denial. |
 | Logout | B logs out; attempt to request a fresh identity assertion with the revoked session. | The identity service refuses the request. Already-issued assertions can remain valid for up to five minutes; do not claim immediate disconnection. |
 
-A separately authenticated signed HTTP client may verify server-side behavior when only one Mac is available. Record that limitation; it does not establish a second desktop's user experience. Do not reuse A's desktop profile or key for B.
+A separately authenticated signed HTTP client may verify server-side behavior when only one Mac is available. Record that limitation; it does not establish a second desktop's user experience or satisfy the two-Mac acceptance gate. Do not reuse A's desktop profile or key for B.
 
 ## Per-user Credential Store acceptance
 
@@ -135,7 +176,7 @@ Per-user credential selection would not make results private inside a shared Buz
 
 ## Close the rehearsal
 
-Record pass/fail/not-run for each scenario with the code revision and sanitized evidence. Do not mark the workshop ready while an identity boundary or participant distribution prerequisite is unresolved.
+Record pass/fail/not-run for each scenario with the code revision and sanitized evidence. For independent participant rehearsals, do not mark acceptance complete while an identity boundary or official-client onboarding prerequisite remains unresolved. A facilitator-only session can proceed after its own successful preflight; record independent-desktop checks as not run.
 
 Remove a temporary participant from private channels and shared-agent allowlists. For relay cleanup, the role-filtered command refuses to remove an administrator:
 

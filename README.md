@@ -14,7 +14,7 @@
 
 [Install](docs/install.md) · [Get started](docs/getting-started.md) · [Use Buzz with a team](docs/using-buzz.md) · [Configure agents](docs/agents.md) · [Architecture](docs/architecture.md)
 
-This repository packages a pinned Buzz desktop client and deploys the supporting identity, relay, read-only tool, and hosted agent services to an operator-selected Cloud Foundry space. It is a deployment reference for a pilot, not a public hosted service or a turnkey marketplace tile.
+This repository deploys Buzz identity, relay, read-only tool, and hosted agent services to an operator-selected Cloud Foundry space. It retains the earlier pinned desktop patch for the existing facilitator rehearsal. The selected attendee path is now the **official Buzz Mac client plus a Tanzu plugin**, pending native SSO and fresh-install validation. It is a deployment reference, not a public hosted service or a turnkey marketplace tile. Read the [current client status and starting path](docs/client-status.md) before installing.
 
 The deployment uses platform service bindings for persistence, identity, model access, and tool access. Agent tasks use a per-agent PostgreSQL lease; messages remain in the relay while local worker files and model session state are temporary. See the architecture and validation guide for boundaries and evidence status.
 
@@ -24,12 +24,13 @@ The deployment uses platform service bindings for persistence, identity, model a
 
 ## Validation status
 
-The private pilot has verified real SSO, desktop conversations, both hosted runtimes, two-user shared-agent threads, private-channel isolation, owner-only denial, and participant logout. Worker PostgreSQL verified TLS 1.3 and its certificate; duplicate-task, restart/context, and configured-deadline checks also passed. The separate native SSO companion verified distinct A/B Credential Store receipts and deletion isolation through MCP Gateway.
+The earlier private pilot verified real SSO and conversations in its facilitator desktop, both hosted runtimes, two-user shared-agent threads, private-channel isolation, owner-only denial, and participant logout. The second user used an independently authenticated signed HTTP client; two installed desktops were not tested. Worker PostgreSQL verified TLS 1.3 and its certificate; duplicate-task, restart/context, and configured-deadline checks also passed. The separate native SSO companion verified distinct A/B Credential Store receipts and deletion isolation through MCP Gateway.
 
-Per-user delegation **inside Buzz** is not implemented; the companion demonstrates it through the native Agent Buildpack UI under the foundation's email-based mapping for two synthetic test accounts. That is not issuer/subject isolation, and production trust-policy approval remains open. Signed/notarized attendee distribution remains pending. See the [validation guide](docs/tmm-validation.md) for the exact evidence. These results do not establish production readiness or a public hosted service.
+Per-user delegation **inside Buzz** is not implemented; the companion demonstrates it through the native Agent Buildpack UI under the foundation's email-based mapping for two synthetic test accounts. That is not issuer/subject isolation, and production trust-policy approval remains open. The vendor-signed official beta and pilot plugin passed separate synthetic messaging/readiness checks; that build does not contain the [generic native federation-configuration PR](https://github.com/block/buzz-app/pull/2152). Official-client SSO, fresh-install onboarding and two-Mac acceptance remain pending. See the [validation guide](docs/tmm-validation.md) for the exact evidence. These results do not establish production readiness or a public hosted service.
 
 ## Start here
 
+- [Current client status and facilitator-first start](docs/client-status.md)
 - [Operator installation and deployment](docs/install.md)
 - [First sign-in and team onboarding](docs/getting-started.md)
 - [How channels, threads, and agent mentions work](docs/using-buzz.md)
@@ -43,7 +44,7 @@ Per-user delegation **inside Buzz** is not implemented; the companion demonstrat
 
 ## Screenshots
 
-The [getting-started guide](docs/getting-started.md) includes authentic desktop screenshots of sign-in, private channel creation, channel membership, and owner/shared-agent replies. The [native companion guide](docs/credential-companion.md#read-the-live-result) shows an actual credential receipt and post-deletion denial.
+The [getting-started guide](docs/getting-started.md) includes authentic earlier facilitator-desktop screenshots of sign-in, private channel creation, channel membership, and owner/shared-agent replies. The [native companion guide](docs/credential-companion.md#read-the-live-result) shows an actual credential receipt and post-deletion denial.
 
 [![A real desktop conversation with the hosted Platform Helper](docs/assets/agent-thread.jpg)](docs/getting-started.md#hosted-agent-reply)
 

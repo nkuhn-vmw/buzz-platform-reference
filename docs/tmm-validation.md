@@ -1,11 +1,27 @@
 # Deployment validation
 
-## Evidence status
+## Current client direction — November 2, 2026
+
+The official vendor-signed beta plus a local plugin passed isolated synthetic
+messaging/readiness and membership checks. Those checks did not exercise the
+SSO-enforced community or hosted agents. Generic [upstream PR #2152](https://github.com/block/buzz-app/pull/2152)
+is draft and unshipped; official-client SSO, fresh-install and two-Mac acceptance
+remain pending. See [client status](client-status.md) for the exact boundary.
+The existing facilitator desktop remains the starting path.
+
+| Official-client compatibility evidence, November 2 | Result and limit |
+| --- | --- |
+| Artifact | Unchanged `v0.7.0-preview.229.1` Mac beta; vendor signature and notarization verified, including signature verification after plugin installation |
+| Plugin | Local prototype installed/enabled; native host request to the isolated relay readiness route returned 200; no SSO trust configured |
+| Conversation | Separate synthetic identity created a channel and persisted its signed message; no hosted-agent acceptance in this space |
+| Membership | Anonymous request 401; nonmember 403; second redemption of a one-use invitation 403; removed disposable member then denied 403 |
+| Excluded | No cohort member admitted, no participant SSO enrollment, no native runtime-descriptor PR in this beta, and no two-Mac SSO test |
+
+## Earlier reference pilot evidence
 
 As of 2026-10-31, the private pilot has verified owner-authorized turns in both
 Buzz worker runtimes, a two-user shared-agent rehearsal, and the separate native
-Credential Store A/B exercise. This is controlled pilot evidence. Signed
-attendee distribution remains pending; no production readiness or public hosted
+Credential Store A/B exercise. This is controlled pilot evidence. This evidence used the earlier facilitator build; no production readiness or public hosted
 service is claimed.
 
 | Check | Result and evidence |
@@ -55,13 +71,14 @@ Keep that space's content and logs appropriate for all approved participants.
 
 - The second user's Buzz checks used an independently authenticated signed HTTP client. A second desktop installation and UX are unverified.
 - The live worker deadline check used a configured test deadline and synthetic child processes. It did not exercise an issuer-expired grant in an actual Buzz conversation. Identity grant revocation is covered separately by integration tests.
-- The desktop build remains unsigned; signed/notarized distribution is unverified.
+- The earlier facilitator build is unsigned. Official-beta vendor signing was verified separately; native SSO and fresh-install onboarding on an official release remain unverified.
 - Relay and identity PostgreSQL TLS was not checked or changed as part of worker TLS validation.
 - Credential Store per-user delegation through the Buzz ACP-to-`/api/chat` path is not implemented end to end.
 - OpenCode remains a bounded extension proposal; no Buzz OpenCode runtime is implemented or verified.
 
 These results support a controlled facilitator rehearsal. Broad attendee rollout
-still requires signed distribution and its own installation check. Keep the
+still requires an official release with supported SSO and its own fresh-install
+and two-Mac checks. Keep the
 listed production and extension limits visible; do not convert source,
 fixture, or CI evidence into claims of live behavior.
 
@@ -75,7 +92,7 @@ For the native model/Gateway path, the repository probe is:
 node scripts/deploy.mjs probe
 ```
 
-It checks the ACP/model/read-only tool path. It does not replace the multi-user allowlist, grant-expiry timer, task restart, thread, signed desktop distribution, or service-specific TLS checks described above.
+It checks the ACP/model/read-only tool path. It does not replace the multi-user allowlist, grant-expiry timer, task restart, thread, official-client onboarding, or service-specific TLS checks described above.
 
 ## Workshop record template
 

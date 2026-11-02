@@ -5,6 +5,12 @@ agent, and team-message paths. The diagrams show service boundaries and data
 flow; they do not represent a live deployment or imply that an operator has
 completed the deployment checklist.
 
+The desktop SSO flow below was tested with the earlier facilitator build. The
+intended attendee path is now the official client plus a plugin; the plugin
+provides guidance/status and does not establish native SSO trust. The generic
+upstream configuration PR is unshipped. See [client status](client-status.md)
+for the exact current boundary; these diagrams are not official-beta SSO evidence.
+
 ## At a glance
 
 ![Buzz Cloud Foundry architecture](assets/architecture.svg)
@@ -140,8 +146,8 @@ remain conversation-scoped.
 | --- | --- | --- |
 | Relay | PostgreSQL event store, S3-compatible object storage, Valkey-compatible Redis, CredHub-backed secrets | Rendered bindings, routes, and service policy in the target space |
 | Identity | OIDC login, scoped agent grants, signed NIP-FI assertions, dedicated PostgreSQL state | Real SSO, allow/deny behavior, key rotation, and mTLS JWKS on the target deployment |
-| Agent | Helper/Tanzu and Researcher/built-in owner-authorized turns, worker PostgreSQL TLS 1.3 certificate verification, duplicate-task refusal, controlled restart, live configured-deadline canary | Two-human allowlist, issuer-expired grant in a real conversation, relay/identity database TLS, and full signed desktop distribution |
-| Desktop | Local OIDC browser handoff and OS credential-store session handling | Signed/notarized distribution and a sanitized end-user onboarding run |
+| Agent | Helper/Tanzu and Researcher/built-in owner-authorized turns, worker PostgreSQL TLS 1.3 certificate verification, duplicate-task refusal, controlled restart, live configured-deadline canary | Two-Mac official-client UX, issuer-expired grant in a real conversation, and relay/identity database TLS in the original reference deployment |
+| Desktop | Earlier facilitator build has local OIDC browser handoff and OS credential-store sessions; official beta/plugin passed separate compatibility checks | Official-release native SSO, fresh-install key/sign-in path, and two-Mac onboarding |
 | Credential Store | Optional native Buildpack support for outbound SSO credential forwarding | Per-user delegation through the Buzz ACP runtime is not implemented end to end |
 
 No private route, account identifier, app GUID, key, token, or credential is
