@@ -1,11 +1,8 @@
 # Client status and pilot starting path
 
-Updated November 2, 2026. Start a controlled **facilitator-led evaluation** with
-an existing, verified SSO desktop. Attendees can bring approved non-confidential
-questions and review agent replies without installing a custom Mac build.
-Before the session, the owner must renew SSO and agent grants, ensure exactly one
-`RUNNING` task per agent used in the session, and rehearse a real tool-backed reply. See the
-[workshop procedure](workshop.md) and [agent operation](agents.md).
+Updated November 5, 2026. **If a teammate wants to join from their own Mac, hold the invitation.** An official release still needs to support choosing the organization at startup and creating or linking a new member’s key on their first visit. The latest preview checked was [243.1](https://github.com/block/buzz-app/releases/tag/v0.7.0-preview.243.1).
+
+For a facilitator-led evaluation, use the existing SSO desktop. Renew organization sign-in and agent grants, confirm one running task per agent, then ask a fresh question and check its tool-backed reply. [Workshop procedure](workshop.md) · [Agent operation](agents.md).
 
 ## Official client plus plugin
 
@@ -28,30 +25,17 @@ not currently distribute that plugin or an attendee installer.
 | --- | --- | --- |
 | Existing reference desktop patch | Earlier live SSO and agent tests passed; local build is unsigned/unnotarized | Existing authorized facilitator rehearsal; screenshots are labeled historical |
 | Official beta plus pilot plugin | Vendor signature and isolated messaging/readiness checks passed | Synthetic compatibility demonstration only; it cannot load this pilot's SSO authority |
-| Official release with native federation configuration | Generic draft PR; not shipped | Intended independent colleague path after upstream support and fresh-install acceptance |
+| Official release with native federation configuration | The upstream PR is ready for maintainer review. Preview 243.1 still uses compile-time configuration. | Qualify a release with both native SSO configuration and first-time identity setup before inviting colleagues. |
 
 ## Generic upstream contribution
 
-[Draft PR #2152](https://github.com/block/buzz-app/pull/2152) adds native runtime
-configuration for any compatible Buzz federation adapter. It has no Tanzu or
-Cloud Foundry dependency or private deployment configuration. An otherwise
-unconfigured desktop can load a trusted local `federated-identity.json` at
-startup; compiled authority takes precedence. Existing native credential storage,
-NIP-FA/NIP-FI handling and plugin grants remain in use. The
-[public contribution fork](https://github.com/nkuhn-vmw/buzz-app) is not a separate
-client distribution.
+PR #2152 lets a desktop with no compiled authority read a trusted local `federated-identity.json` at startup. A compiled deployment policy takes precedence. The change uses Buzz’s existing native credentials and relay assertions, and applies to any compatible federation adapter. The fork hosts the contribution. Use Block’s releases for official client downloads. [Upstream PR and Mac test results](https://github.com/block/buzz-app/pull/2152) · [Contribution fork](https://github.com/nkuhn-vmw/buzz-app).
 
-The runtime file expands the native trust model: another process running as the
-same OS user, including an unsandboxed plugin, could plant it and redirect the
-organization sign-in prompt. Protect its parent directory and trust installed
-plugins; file checks do not protect against malicious same-user processes.
-Upstream maintainers still need to accept this trust model or choose an alternative.
+The descriptor chooses where users sign in. Obtain it from a trusted operator, protect its parent directory, and review plugins before installing them. A process running as the Mac user can replace files that user owns. Maintainer review includes this local trust decision.
 
-Local federation/relay tests and Clippy passed. DCO, Semgrep OSS and zizmor passed;
-the application CI run is `action_required` with no jobs run. The PR is a draft,
-not included in the tested beta. Modified desktop live SSO and fresh enterprise
-key onboarding remain unverified. The descriptor alone does not solve a first-run
-onboarding flow or retarget other upstream services.
+On a Mac running the PR candidate, an existing member signed out of the organization and a protected write returned 401. After signing back in with the same key, the relay accepted a new message and the member saw it after reopening the channel. DCO, Semgrep and zizmor passed. Application CI requires upstream authorization. [Candidate evidence](https://github.com/block/buzz-app/pull/2152) · [Application CI](https://github.com/block/buzz-app/actions/runs/41724185340).
+
+**What still needs to ship.** Preview 243.1 reads the authority at compile time and its Welcome screen offers the build’s sign-in service. A separate draft covers required-community signup and recovery. The relay has merged discovery support for reporting a host's sign-in requirement. That field tells clients **when** sign-in is required. Operators must still supply a trusted authority, and first-time members need a supported way to create or link their own key. [Release source](https://github.com/block/buzz-app/blob/56729773f48d3f922a043ac83b7faa727bcfc9c2/src-tauri/src/federated_identity/mod.rs#L134) · [First-run proposal](https://github.com/block/buzz-app/pull/2245) · [Merged relay discovery](https://github.com/block/buzz/pull/8988).
 
 ## Before independent attendee onboarding
 
