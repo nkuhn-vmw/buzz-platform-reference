@@ -1,13 +1,10 @@
 # Deployment validation
 
-## Current client direction — November 2, 2026
+## Current client direction — November 5, 2026
 
-The official vendor-signed beta plus a local plugin passed isolated synthetic
-messaging/readiness and membership checks. Those checks did not exercise the
-SSO-enforced community or hosted agents. Generic [upstream PR #2152](https://github.com/block/buzz-app/pull/2152)
-is draft and unshipped; official-client SSO, fresh-install and two-Mac acceptance
-remain pending. See [client status](client-status.md) for the exact boundary.
-The existing facilitator desktop remains the starting path.
+An existing member completed native Mac sign-out, denied access and same-key reconnect using the candidate in upstream review. For a colleague starting with a clean Mac, independent organization signup and a shared thread on two official clients remain open. Preview 243.1 still requires a compiled authority. [Upstream candidate evidence](https://github.com/block/buzz-app/pull/2152) · [Current client status and onboarding gates](client-status.md).
+
+The following results are from the earlier vendor-signed beta in an isolated synthetic community.
 
 | Official-client compatibility evidence, November 2 | Result and limit |
 | --- | --- |
