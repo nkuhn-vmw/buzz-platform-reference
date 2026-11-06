@@ -45,13 +45,14 @@ The following are single synthetic runs on a private Cloud Foundry deployment, n
 | OpenCode tool boundary | Runtime rejected an attempted shell tool call; the requested synthetic file was absent |
 | OpenClaw 2026.10.10, bound Qwen model | Five pre-restart and two post-restart signed replies in the correct threads; distinct markers stayed separate |
 | OpenClaw draft/revision | Both took 18 seconds; the revision retained evidence-gap labels; separate thread returned `NO_MARKER` in six |
+| OpenClaw older-history check (November 6) | Nine signed replies across two threads; after 20 unmentioned filler messages per thread and a real restart, each recovered only its own older marker |
 | OpenClaw storage | A replacement container retained both original native session IDs, transcript counts and hashes on a dedicated block volume |
 | Fast follow-ups | The bridge steered two same-second requests into one final signed answer covering both |
 | Restart replay | Strict fixture failed: older mentions can be reprocessed after restart |
 
 The OpenCode draft invented interface details and marked them as assumptions. Its revision dropped the assumption labels. The initial draft also exceeded its requested 220-word limit (236 words). OpenClaw kept the evidence labels and stayed under the limit in both turns. Delivery and recall passed; outputs still needed product verification and editorial review. Real team usefulness remains to be measured.
 
-Both integrations currently recover up to 12 relay messages into a new ACP session after restart. OpenClaw retains older native transcripts on its volume, but the bridge does not resume the exact former session. A long-running project should keep a short, human-approved current brief in its thread.
+OpenCode currently uses the 12-message default. OpenClaw now uses the upstream-supported `BUZZ_ACP_CONTEXT_MESSAGE_LIMIT=100`. The restart check first established that the latest 12 messages and the pinned newest agent reply contained no marker; it then verified each new session received only its own older marker and all 20 of its thread’s filler messages. This demonstrates expanded relay-context recovery, subject to the model’s token budget. OpenClaw also retains older native transcripts on its volume, but the bridge still creates a fresh ACP session rather than resuming the exact former session. Keep a short, human-approved current brief for a long-running project. The replay limitation below remains.
 
 ## Boundaries for this first rollout
 
