@@ -5,6 +5,8 @@ runtime turns from lifecycle checks and runtime alternatives that remain
 unverified or proposed. A private pilot deployment is not a public or
 production service.
 
+The private team pilot has also qualified bounded hosted OpenCode and OpenClaw text conversations. See [shared-agent trials](hosted-agent-trials.md) for the current evidence, restart limitations and the teammate workflow. These worker integrations are not included in this public installer.
+
 ## Native integration: Tanzu Agent Buildpack
 
 The tested flow is:

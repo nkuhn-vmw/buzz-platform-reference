@@ -36,6 +36,7 @@ Per-user delegation **inside Buzz** is not implemented; the companion demonstrat
 - [How channels, threads, and agent mentions work](docs/using-buzz.md)
 - [Agent ownership, sharing, and author policy](docs/agents.md)
 - [Runtime choices and OpenCode assessment](docs/agent-runtimes.md)
+- [Shared OpenCode/OpenClaw trials, measurements and limits](docs/hosted-agent-trials.md)
 - [Architecture and trust boundaries](docs/architecture.md)
 - [Validation checklist](docs/tmm-validation.md)
 - [TMM workshop rehearsal and participant onboarding](docs/workshop.md)
