@@ -70,3 +70,5 @@ If repeated copy/paste is the main cost, add one read-only source to a project-s
 For local subscription-backed options, confirm the provider's supported client, seat and sharing rules separately. A Buzz public key does not grant a provider seat or make personal OAuth credentials suitable for a shared hosted worker.
 
 See [runtime choices](agent-runtimes.md), [agent ownership](agents.md), and [architecture](architecture.md) for the reference implementation's existing boundaries.
+
+The bridge permission probe returned `allow-once` for a synthetic permission request under `dont-ask`. It executed no tool. Runtime tool policies are therefore the enforcing layer; `dont-ask` is not a second denial boundary. A separate negative-channel check passed: an allowed caller in a channel outside the configured list triggered no turn or reply.
